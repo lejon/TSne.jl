@@ -8,6 +8,9 @@ module TSne
 #  
 #  This is a straight off Julia port of Laurens van der Maatens python implementation of tsne
 
+export tsne, pca
+
+
 
 function tile(A, V::(Int64,Int64))
          return tile(A,V[1],V[2])
