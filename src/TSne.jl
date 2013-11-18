@@ -10,8 +10,6 @@ module TSne
 
 export tsne, pca
 
-
-
 function tile(A, V::(Int64,Int64))
          return tile(A,V[1],V[2])
 end
@@ -27,7 +25,6 @@ function tile(A, rowtimes, coltimes)
         end
         return res
 end
-
 
 function pca(X, no_dims = 50)
 	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
@@ -162,7 +159,9 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		
 		# Compute current value of cost function
 		if mod((iter + 1), 10) == 0
-			C = sum(P .* log(P ./ Q));
+			logs = log(P ./ Q)
+			logs = map((x) -> isnan(x) ? 0.0 : x, logs)
+			C = sum(P .* logs);
 			println("Iteration ", (iter + 1), ": error is ", C)
 		end
 		# Stop lying about P-values
