@@ -2,7 +2,7 @@ using RDatasets
 using Gadfly 
 using TSne
 
-use_iris = false
+use_iris = true
 lables = ()
 
 if use_iris
