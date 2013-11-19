@@ -10,27 +10,11 @@ module TSne
 
 export tsne, pca
 
-function tile(A, V::(Int64,Int64))
-         return tile(A,V[1],V[2])
-end
-
-function tile(A, rowtimes, coltimes)
-        res = A
-        for i in 1:(coltimes-1)
-          res = [res A]
-        end
-        rowres = res
-        for i in 1:(rowtimes-1)
-          res = [res;rowres]
-        end
-        return res
-end
-
 function pca(X, no_dims = 50)
 	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
 	println("Preprocessing the data using PCA...")
 	(n, d) = size(X)
-	X = X - tile(mean(X, 1), (n, 1));
+	X = X - repmat(mean(X, 1), n, 1);
 	(l, M) = eig(X' * X);
 	Y = X * M[:,1:no_dims]
 	return Y;
@@ -143,7 +127,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		PQ = P - Q
  
 		for i in 1:n
- 			dY[i,:] = sum(tile(PQ[:,i] .* num[:,i], (1, no_dims)) .* (Y[i,:] .- Y),1)
+ 			dY[i,:] = sum(repmat(PQ[:,i] .* num[:,i], 1, no_dims) .* (Y[i,:] .- Y),1)
 		end
 		# Perform the update
 		if iter <= 20
@@ -155,7 +139,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		gains[gains .< min_gain] = min_gain
 		iY = momentum .* iY - eta .* (gains .* dY);
 		Y = Y + iY;
-		Y = Y - tile(mean(Y, 1), (n, 1));
+		Y = Y - repmat(mean(Y, 1), n, 1);
 		
 		# Compute current value of cost function
 		if mod((iter + 1), 10) == 0
