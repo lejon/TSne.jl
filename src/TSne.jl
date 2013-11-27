@@ -119,7 +119,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		# Compute pairwise affinities		
 		sum_Y = sum(Y.^2, 2)
 		num = 1 / (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
-        # Setting diagonal to zero
+		# Setting diagonal to zero
 		num = num-diagm(diag(num))
 		Q = num / sum(num)
 		Q = maximum(Q, 1e-12)
