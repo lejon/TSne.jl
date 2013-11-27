@@ -10,16 +10,6 @@ module TSne
 
 export tsne, pca
 
-function pca(X, no_dims = 50)
-	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
-	println("Preprocessing the data using PCA...")
-	(n, d) = size(X)
-	X = X - repmat(mean(X, 1), n, 1);
-	(l, M) = eig(X' * X);
-	Y = X * M[:,1:no_dims]
-	return Y;
-end
-
 function Hbeta(D, beta = 1.0)
 	#Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
 	P = exp(-copy(D) * beta);
@@ -34,23 +24,23 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
 	println("Computing pairwise distances...")
 	(n, d) = size(X)
 	sum_X = sum((X.^2),2)
-	D = (-2 * (X * X') .+ sum_X') .+ sum_X 
+	D = (-2 * (X * X') .+ sum_X)' .+ sum_X 
 	P = zeros(n, n)
 	beta = ones(n, 1)
 	logU = log(perplexity)
 
 	# Loop over all datapoints
-        range = [1:n]
+	range = [1:n]
 	for i in 1:n
 		# Print progress
 		if mod(i, 500) == 0
-			println("Computing P-values for point " *string(i) *  " of " * string(n) * "...")
-                end
+			println("Computing P-values for point " * string(i) *  " of " * string(n) * "...")
+        	end
 		# Compute the Gaussian kernel and entropy for the current precision
 		betamin = -Inf; 
 		betamax =  Inf;
 
-                inds = range[range .!=i]
+        	inds = range[range .!=i]
 		Di = D[i, inds]
 		(H, thisP) = Hbeta(Di, beta[i])
 		# Evaluate whether the perplexity is within tolerance
@@ -64,14 +54,14 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
 					beta[i] = beta[i] * 2;
 				else
 					beta[i] = (beta[i] + betamax) / 2;
-                                end
+                		end
 			else
 				betamax = beta[i];
 				if betamin == Inf || betamin == -Inf
 					beta[i] = beta[i] / 2;
 				else
 					beta[i] = (beta[i] + betamin) / 2;
-                                end
+                		end
 			end
 			# Recompute the values
 			(H, thisP) = Hbeta(Di, beta[i]);
@@ -79,13 +69,24 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
 			tries = tries + 1;
 		end
 		# Set the final row of P
-                P[i, inds] = thisP
+  		P[i, inds] = thisP
+
 	end
 	# Return final P-matrix
 	println("Mean value of sigma: " * string(mean(sqrt(1 / beta))))
 	return P
 end
 
+function pca(X, no_dims = 50)
+	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
+	println("Preprocessing the data using PCA...")
+	(n, d) = size(X)
+	X = X - repmat(mean(X, 1), n, 1);
+	(l, M) = eig(X' * X);
+	ret_dims = no_dims > d ? d : no_dims;
+	Y = X * M[:,1:ret_dims]
+	return Y;
+end
 
 function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
 	#Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to no_dims dimensions.
@@ -118,11 +119,11 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		# Compute pairwise affinities		
 		sum_Y = sum(Y.^2, 2)
 		num = 1 / (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
-                # Setting diagonal to zero
+        # Setting diagonal to zero
 		num = num-diagm(diag(num))
 		Q = num / sum(num)
 		Q = maximum(Q, 1e-12)
-		
+
 		# Compute gradient
 		PQ = P - Q
  
@@ -134,7 +135,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 			momentum = initial_momentum
 		else
 			momentum = final_momentum
-                end
+        	end
 		gains = (gains + 0.2) * ((dY .> 0) != (iY .> 0)) + (gains * 0.8) * ((dY .> 0) == (iY .> 0))
 		gains[gains .< min_gain] = min_gain
 		iY = momentum .* iY - eta .* (gains .* dY);
@@ -144,6 +145,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		# Compute current value of cost function
 		if mod((iter + 1), 10) == 0
 			logs = log(P ./ Q)
+			# Below is a fix so we don't get NaN when the error is computed
 			logs = map((x) -> isnan(x) ? 0.0 : x, logs)
 			C = sum(P .* logs);
 			println("Iteration ", (iter + 1), ": error is ", C)
@@ -152,9 +154,9 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		if iter == 100
 			P = P / 4;
 		end
-        end
+    	end
 	# Return solution
 	return Y;
-end
+	end
 
 end
