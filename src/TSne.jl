@@ -32,40 +32,45 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
 	# Loop over all datapoints
 	range = [1:n]
 	for i in 1:n
+
 		# Print progress
 		if mod(i, 500) == 0
 			println("Computing P-values for point " * string(i) *  " of " * string(n) * "...")
         	end
+
 		# Compute the Gaussian kernel and entropy for the current precision
 		betamin = -Inf; 
 		betamax =  Inf;
 
-        	inds = range[range .!=i]
+		inds = range[range .!=i]
 		Di = D[i, inds]
 		(H, thisP) = Hbeta(Di, beta[i])
+
 		# Evaluate whether the perplexity is within tolerance
 		Hdiff = H - logU;
 		tries = 0;
 		while abs(Hdiff) > tol && tries < 50
+
 			# If not, increase or decrease precision
 			if Hdiff > 0
 				betamin = beta[i]
 				if betamax == Inf || betamax == -Inf
 					beta[i] = beta[i] * 2;
 				else
-					beta[i] = (beta[i] + betamax) / 2;
-                		end
+					beta[i] = (beta[i] + betamax) / 2
+				end
 			else
 				betamax = beta[i];
 				if betamin == Inf || betamin == -Inf
 					beta[i] = beta[i] / 2;
 				else
-					beta[i] = (beta[i] + betamin) / 2;
-                		end
+					beta[i] = (beta[i] + betamin) / 2
+				end
 			end
+
 			# Recompute the values
-			(H, thisP) = Hbeta(Di, beta[i]);
-			Hdiff = H - logU;
+			(H, thisP) = Hbeta(Di, beta[i])
+			Hdiff = H - logU
 			tries = tries + 1;
 		end
 		# Set the final row of P
@@ -79,13 +84,14 @@ end
 
 function pca(X, no_dims = 50)
 	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
+	
 	println("Preprocessing the data using PCA...")
 	(n, d) = size(X)
-	X = X - repmat(mean(X, 1), n, 1);
-	(l, M) = eig(X' * X);
-	ret_dims = no_dims > d ? d : no_dims;
+	X = X - repmat(mean(X, 1), n, 1)
+	(l, M) = eig(X' * X)
+	ret_dims = no_dims > d ? d : no_dims
 	Y = X * M[:,1:ret_dims]
-	return Y;
+	return Y
 end
 
 function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
