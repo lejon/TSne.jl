@@ -78,7 +78,7 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
 
 	end
 	# Return final P-matrix
-	println("Mean value of sigma: " * string(mean(sqrt(1 / beta))))
+	println("Mean value of sigma: " * string(mean(sqrt(1 ./ beta))))
 	return P
 end
 
@@ -118,17 +118,17 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 	P = P + P'
 	P = P / sum(P);
 	P = P * 4;						# early exaggeration
-	P = maximum(P, 1e-12);
+	P = max(P, 1e-12);
 	
 	# Run iterations
 	for iter in 1:max_iter
 		# Compute pairwise affinities		
 		sum_Y = sum(Y.^2, 2)
-		num = 1 / (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
+		num = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
 		# Setting diagonal to zero
 		num = num-diagm(diag(num))
 		Q = num / sum(num)
-		Q = maximum(Q, 1e-12)
+		Q = max(Q, 1e-12)
 
 		# Compute gradient
 		PQ = P - Q
