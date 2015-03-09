@@ -12,20 +12,20 @@ The examples in the 'examples' dir requires you to have Gadfly and RDatasets ins
 
 Basic installation: 
 
-  julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")
+  `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
   
 Basic usage: 
   
-`using TSne
-using Gadfly
+`using TSne`
+`using Gadfly`
 
-X = readcsv("mnist2500_X_reformatted.txt",Float64)
-labelf = open ("mnist2500_labels.txt")
-labels = readlines(labelf)
-labels = map((x)->chomp(x), labels)
+`X = readcsv("mnist2500_X_reformatted.txt",Float64)`
+`labelf = open ("mnist2500_labels.txt")`
+`labels = readlines(labelf)`
+`labels = map((x)->chomp(x), labels)`
 
-Y = tsne(X, 2, 50, 1000, 20.0)
-writecsv("mnist2500_tsne.csv",Y)
+`Y = tsne(X, 2, 50, 1000, 20.0)`
+`writecsv("mnist2500_tsne.csv",Y)`
 
-theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
-draw(PDF("myplot.pdf", 4inch, 3inch), theplot)`
+`theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)`
+`draw(PDF("myplot.pdf", 4inch, 3inch), theplot)`
