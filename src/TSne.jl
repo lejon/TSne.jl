@@ -5,7 +5,7 @@ module TSne
 
 #
 #  tsne.jl
-#  
+#
 #  This is a straight off Julia port of Laurens van der Maatens python implementation of tsne
 
 export tsne, pca
@@ -18,13 +18,13 @@ function Hbeta(D, beta = 1.0)
 	P = P / sumP;
 	return (H, P);
 end
-	
+
 function x2p(X, tol = 1e-5, perplexity = 30.0)
 	#Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
 	println("Computing pairwise distances...")
 	(n, d) = size(X)
 	sum_X = sum((X.^2),2)
-	D = (-2 * (X * X') .+ sum_X)' .+ sum_X 
+	D = (-2 * (X * X') .+ sum_X)' .+ sum_X
 	P = zeros(n, n)
 	beta = ones(n, 1)
 	logU = log(perplexity)
@@ -39,7 +39,7 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
         	end
 
 		# Compute the Gaussian kernel and entropy for the current precision
-		betamin = -Inf; 
+		betamin = -Inf;
 		betamax =  Inf;
 
 		inds = range[range .!=i]
@@ -84,11 +84,14 @@ end
 
 function pca(X, no_dims = 50)
 	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
-	
+
 	println("Preprocessing the data using PCA...")
 	(n, d) = size(X)
 	X = X - repmat(mean(X, 1), n, 1)
-	(l, M) = eig(X' * X)
+	C = (X' * X) ./ (size(X,1)-1)
+	(l, M) = eig(C)
+	sorder = sortperm(l,rev=true)
+	M = M[:,sorder]
 	ret_dims = no_dims > d ? d : no_dims
 	Y = X * M[:,1:ret_dims]
 	return Y
@@ -98,7 +101,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 	#Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to no_dims dimensions.
 	# Diffrent from orginal, default is to not use PCA
 	println("Initial X Shape is : " * string(size(X)))
-		
+
 	# Initialize variables
 	if(initial_dims>0)
 		X = pca(X, initial_dims)
@@ -112,17 +115,17 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 	dY = zeros(n, no_dims)
 	iY = zeros(n, no_dims)
 	gains = ones(n, no_dims)
-	
+
 	# Compute P-values
 	P = x2p(X, 1e-5, perplexity);
 	P = P + P'
 	P = P / sum(P);
 	P = P * 4;						# early exaggeration
 	P = max(P, 1e-12);
-	
+
 	# Run iterations
 	for iter in 1:max_iter
-		# Compute pairwise affinities		
+		# Compute pairwise affinities
 		sum_Y = sum(Y.^2, 2)
 		num = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
 		# Setting diagonal to zero
@@ -132,7 +135,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 
 		# Compute gradient
 		PQ = P - Q
- 
+
 		for i in 1:n
  			dY[i,:] = sum(repmat(PQ[:,i] .* num[:,i], 1, no_dims) .* (Y[i,:] .- Y),1)
 		end
@@ -141,13 +144,13 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 			momentum = initial_momentum
 		else
 			momentum = final_momentum
-        	end
-		gains = (gains + 0.2) * ((dY .> 0) != (iY .> 0)) + (gains * 0.8) * ((dY .> 0) == (iY .> 0))
+		end
+		gains = (gains + 0.2) .* ((dY .> 0) .!= (iY .> 0)) + (gains * 0.8) .* ((dY .> 0) .== (iY .> 0))
 		gains[gains .< min_gain] = min_gain
 		iY = momentum .* iY - eta .* (gains .* dY);
 		Y = Y + iY;
 		Y = Y - repmat(mean(Y, 1), n, 1);
-		
+
 		# Compute current value of cost function
 		if mod((iter + 1), 10) == 0
 			logs = log(P ./ Q)
