@@ -6,3 +6,4 @@ Please observe, that it is still not extensively tested.
 
 The examples in the 'examples' dir requires you to have Gadfly and RDatasets installed
 
+[Resulting graph](http://lejon.github.io/TSne/)
