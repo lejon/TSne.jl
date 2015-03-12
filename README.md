@@ -9,8 +9,6 @@ The examples in the 'examples' dir requires you to have Gadfly and RDatasets ins
 
 **Please note:** At some point something changed in Julia which caused poor results, it took a while before I noted this but now  I have updated the implementation so that it works again. See the link below for images rendered using this implementation.
 
-[Resulting graph](http://lejon.github.io/TSne/)
-
 Basic installation: 
 
   `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
@@ -27,3 +25,5 @@ using Gadfly
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 ```
+
+![](example.png)
