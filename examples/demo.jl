@@ -1,41 +1,44 @@
-using RDatasets
 using Gadfly 
 using TSne
 
-use_iris = true
+if length(ARGS)==0 
+	println("usage:\n\tjulia demo.jl iris\n\tjulia demo.jl mnist")
+	exit(0)
+end
+
+use_iris = ARGS[1] == "iris"
 lables = ()
 
 if use_iris
+	using RDatasets
 	println("Using Iris dataset.")
-	iris = data("datasets","iris")
-	X = matrix(iris[:,2:5])
-	labels = iris[:,6]
+	iris = dataset("datasets","iris")
+	X = array(iris[:,1:4])
+	labels = iris[:,5]
 	plotname = "iris"
 	initial_dims = -1
 	iterations = 1500
 	perplexity = 15
 else
-	println("Using MNIST dataset.")
-	mnist = readcsv("mnist2500_X_reformatted.txt",Float64)
-	X = mnist
-	labelf = open ("mnist2500_labels.txt")
-	labels = readlines(labelf)
-	labels = map((x)->chomp(x), labels)
+	using MNIST
+	X, labels = traindata()
+	X = X'
+	X = X[1:2500,:]
+	Xcenter = X - mean(X)
+	Xstd = std(X)
+	X = Xcenter / Xstd
 	plotname = "mnist"
 	initial_dims = 50
 	iterations = 1000
-	perplexity = 30
+	perplexity = 20
 end
-
-
-#X = randn(5, 3)
 
 println("X dimensions are: " * string(size(X)))
 Y = tsne(X, 2, initial_dims, iterations, perplexity)
-#Y = pca(X,2)
 println("Y dimensions are: " * string(size(Y)))
 
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 
+writecsv(plotname*"_tsne_out.csv",Y)
 draw(PDF(plotname*".pdf", 4inch, 3inch), theplot)
 draw(SVG(plotname*".svg", 4inch, 3inch), theplot)
