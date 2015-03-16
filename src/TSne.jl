@@ -134,11 +134,9 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
 		Q = max(Q, 1e-12)
 
 		# Compute gradient
-		PQ = P - Q
+		L = (P - Q) .* num;
+    		dY = 4 * (diagm(sum(L, 1)[:,]) - L) * Y
 
-		for i in 1:n
- 			dY[i,:] = sum(repmat(PQ[:,i] .* num[:,i], 1, no_dims) .* (Y[i,:] .- Y),1)
-		end
 		# Perform the update
 		if iter <= 20
 			momentum = initial_momentum
