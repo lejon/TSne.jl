@@ -19,7 +19,13 @@ Basic usage:
 using TSne, MNIST
 
 data, labels = traindata()
-Y = tsne(data, 2, 50, 1000, 20.0)
+data = data'
+data = data[1:2500,:]
+Xcenter = data - mean(data)
+Xstd = std(data)
+X = Xcenter / Xstd
+
+Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
