@@ -21,6 +21,7 @@ using TSne, MNIST
 data, labels = traindata()
 data = data'
 data = data[1:2500,:]
+# Normalize the data, this should be done of there are large scale differences in the dataset
 Xcenter = data - mean(data)
 Xstd = std(data)
 X = Xcenter / Xstd
