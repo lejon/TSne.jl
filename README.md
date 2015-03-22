@@ -9,6 +9,8 @@ The examples in the 'examples' dir requires you to have Gadfly and RDatasets ins
 
 **Please note:** At some point something changed in Julia which caused poor results, it took a while before I noted this but now  I have updated the implementation so that it works again. See the link below for images rendered using this implementation.
 
+For some tips working with t-sne [Klick here] (http://lejon.github.io)
+
 Basic installation: 
 
   `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
