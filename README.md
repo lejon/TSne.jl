@@ -31,6 +31,7 @@ X = Xcenter / Xstd
 Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly
+labels = [string(i) for i in labels[1:2500]]
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 ```
