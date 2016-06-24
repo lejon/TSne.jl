@@ -12,11 +12,11 @@ export tsne, pca
 
 function Hbeta(D, beta = 1.0)
     #Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
-    P = exp(-copy(D) * beta);
-    sumP = sum(P);
-    H = log(sumP) + beta * sum(D .* P) / sumP;
-    P = P / sumP;
-    return (H, P);
+    P = exp(-copy(D) * beta)
+    sumP = sum(P)
+    H = log(sumP) + beta * sum(D .* P) / sumP
+    P = P / sumP
+    return (H, P)
 end
 
 function x2p(X, tol = 1e-5, perplexity = 30.0)
@@ -39,30 +39,30 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
         end
 
         # Compute the Gaussian kernel and entropy for the current precision
-        betamin = -Inf;
-        betamax =  Inf;
+        betamin = -Inf
+        betamax =  Inf
 
         inds = range[range .!=i]
         Di = D[i, inds]
         (H, thisP) = Hbeta(Di, beta[i])
 
         # Evaluate whether the perplexity is within tolerance
-        Hdiff = H - logU;
-        tries = 0;
+        Hdiff = H - logU
+        tries = 0
         while abs(Hdiff) > tol && tries < 50
 
             # If not, increase or decrease precision
             if Hdiff > 0
                 betamin = beta[i]
                 if betamax == Inf || betamax == -Inf
-                    beta[i] = beta[i] * 2;
+                    beta[i] = beta[i] * 2
                 else
                     beta[i] = (beta[i] + betamax) / 2
                 end
             else
-                betamax = beta[i];
+                betamax = beta[i]
                 if betamin == Inf || betamin == -Inf
-                    beta[i] = beta[i] / 2;
+                    beta[i] = beta[i] / 2
                 else
                     beta[i] = (beta[i] + betamin) / 2
                 end
@@ -71,7 +71,7 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
             # Recompute the values
             (H, thisP) = Hbeta(Di, beta[i])
             Hdiff = H - logU
-            tries = tries + 1;
+            tries = tries + 1
         end
         # Set the final row of P
         P[i, inds] = thisP
@@ -106,7 +106,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
     if(initial_dims>0)
         X = pca(X, initial_dims)
     end
-    (n, d) = size(X);
+    (n, d) = size(X)
     initial_momentum = 0.5
     final_momentum = 0.8
     eta = 500
@@ -117,11 +117,11 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
     gains = ones(n, no_dims)
 
     # Compute P-values
-    P = x2p(X, 1e-5, perplexity);
+    P = x2p(X, 1e-5, perplexity)
     P = P + P'
-    P = P / sum(P);
-    P = P * 4;                        # early exaggeration
-    P = max(P, 1e-12);
+    P = P / sum(P)
+    P = P * 4                        # early exaggeration
+    P = max(P, 1e-12)
 
     # Run iterations
     for iter in 1:max_iter
@@ -134,7 +134,7 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
         Q = max(Q, 1e-12)
 
         # Compute gradient
-        L = (P - Q) .* num;
+        L = (P - Q) .* num
         dY = 4 * (diagm(sum(L, 1)[:,]) - L) * Y
 
         # Perform the update
@@ -145,25 +145,25 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
         end
         gains = (gains + 0.2) .* ((dY .> 0) .!= (iY .> 0)) + (gains * 0.8) .* ((dY .> 0) .== (iY .> 0))
         gains[gains .< min_gain] = min_gain
-        iY = momentum .* iY - eta .* (gains .* dY);
-        Y = Y + iY;
-        Y = Y - repmat(mean(Y, 1), n, 1);
+        iY = momentum .* iY - eta .* (gains .* dY)
+        Y = Y + iY
+        Y = Y - repmat(mean(Y, 1), n, 1)
 
         # Compute current value of cost function
         if mod((iter + 1), 10) == 0
             logs = log(P ./ Q)
             # Below is a fix so we don't get NaN when the error is computed
             logs = map((x) -> isnan(x) ? 0.0 : x, logs)
-            C = sum(P .* logs);
+            C = sum(P .* logs)
             println("Iteration ", (iter + 1), ": error is ", C)
         end
         # Stop lying about P-values
         if iter == 100
-            P = P / 4;
+            P = P / 4
         end
     end
     # Return solution
-    return Y;
+    return Y
 end
 
 end
