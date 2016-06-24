@@ -10,8 +10,10 @@ module TSne
 
 export tsne, pca
 
+"""
+    Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
+"""
 function Hbeta(D, beta = 1.0)
-    #Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
     P = exp(-copy(D) * beta)
     sumP = sum(P)
     H = log(sumP) + beta * sum(D .* P) / sumP
@@ -19,8 +21,10 @@ function Hbeta(D, beta = 1.0)
     return (H, P)
 end
 
+"""
+    Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
+"""
 function x2p(X, tol = 1e-5, perplexity = 30.0)
-    #Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
     println("Computing pairwise distances...")
     (n, d) = size(X)
     sum_X = sum((X.^2),2)
@@ -82,9 +86,10 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
     return P
 end
 
+"""
+    Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
+"""
 function pca(X, no_dims = 50)
-    #Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
-
     println("Preprocessing the data using PCA...")
     (n, d) = size(X)
     X = X - repmat(mean(X, 1), n, 1)
@@ -97,9 +102,11 @@ function pca(X, no_dims = 50)
     return Y
 end
 
+"""
+    Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to no_dims dimensions.
+    Diffrent from orginal, default is to not use PCA
+"""
 function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
-    #Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to no_dims dimensions.
-    # Diffrent from orginal, default is to not use PCA
     println("Initial X Shape is : " * string(size(X)))
 
     # Initialize variables
