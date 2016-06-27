@@ -1,13 +1,14 @@
-language: cpp
-compiler:
-  - clang
+language: julia
+os:
+    - osx
+    - linux
+julia:
+    - release
 notifications:
   email: false
-before_install:
-  - sudo add-apt-repository ppa:staticfloat/julia-deps -y
-  - sudo add-apt-repository ppa:staticfloat/julianightlies -y
-  - sudo apt-get update -qq -y
-  - sudo apt-get install libpcre3-dev julia -y
+
 script:
-  - julia -e 'Pkg.init(); run(`ln -s $(pwd()) $(Pkg.dir())/TSne`); Pkg.resolve()'
-  - julia -e 'using TSne; @assert isdefined(:TSne); @assert typeof(TSne) === Module'
+    - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("TSne", coverage=true)'
+
+after_success:
+    - julia -e 'cd(Pkg.dir("TSne")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
