@@ -17,7 +17,7 @@ export tsne
 """
 function Hbeta!(P::AbstractVector, D::Matrix, beta::Number, i::Int)
     Di = slice(D, :, i)
-    @inbounds for j in eachindex(Di)
+    @inbounds @simd for j in eachindex(Di)
         P[j] = exp(Di[j] * -beta)
     end
     P[i] = 0.0
@@ -142,14 +142,14 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         # FIXME profiling indicates a lot of time is lost in copytri!()
         A_mul_Bt!(Q, Y, Y)
         @inbounds for j in 1:size(Q, 2)
-            for i in 1:(j-1)
+            @simd for i in 1:(j-1)
                 Q[j,i] = Q[i,j] = 1.0 / (1.0 - 2.0 * Q[i,j] + sum_YY[i] + sum_YY[j])
             end
         end
         sum_Q = sum(Q)
 
         # Compute gradient
-        @inbounds for i in eachindex(P)
+        @inbounds @simd for i in eachindex(P)
             L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
         end
         Lcolsums = squeeze(sum(L, 1), 1)
