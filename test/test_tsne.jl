@@ -2,7 +2,7 @@ facts("tsne()") do
     context("Iris dataset") do
         iris = dataset("datasets","iris")
         X = convert(Matrix, iris[:, 1:4])
-        Y = tsne(X, 3, -1, 1500, 15)
+        Y = tsne(X, 3, -1, 1500, 15, verbose=true)
         @fact size(Y) --> (150, 3)
     end
 

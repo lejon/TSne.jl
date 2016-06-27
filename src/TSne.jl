@@ -1,5 +1,7 @@
 module TSne
 
+using ProgressMeter
+
 # Numpy Math.sum => axis = 0 => sum down the columns. axis = 1 => sum along the rows
 # Julia Base.sum => axis = 1 => sum down the columns. axis = 2 => sum along the rows
 
@@ -24,8 +26,9 @@ end
 """
     Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
 """
-function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0)
-    println("Computing pairwise distances...")
+function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+             verbose::Bool=false, progress::Bool=true)
+    verbose && info("Computing pairwise distances...")
     (n, d) = size(X)
     sum_X = sum((X.^2),2)
     D = (-2 * (X * X') .+ sum_X)' .+ sum_X
@@ -35,12 +38,9 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0)
 
     # Loop over all datapoints
     range = [1:n]
+    progress && (pb = Progress(n, "Computing point perplexities"))
     for i in 1:n
-
-        # Print progress
-        if mod(i, 500) == 0
-            println("Computing P-values for point " * string(i) *  " of " * string(n) * "...")
-        end
+        progress && update!(pb, i)
 
         # Compute the Gaussian kernel and entropy for the current precision
         betamin = -Inf
@@ -77,12 +77,14 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0)
             Hdiff = H - logU
             tries = tries + 1
         end
+		verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final row of P
         P[i, inds] = thisP
 
     end
+	progress && finish!(pb)
     # Return final P-matrix
-    println("Mean value of sigma: " * string(mean(sqrt(1 ./ beta))))
+    verbose && info("Mean σ=$(mean(sqrt(1 ./ beta)))")
     return P
 end
 
@@ -90,7 +92,7 @@ end
     Runs PCA on the NxD array X in order to reduce its dimensionality to `ndims` dimensions.
 """
 function pca{T}(X::Matrix{T}, ndims::Integer = 50)
-    println("Preprocessing the data using PCA...")
+    info("Preprocessing the data using PCA...")
     (n, d) = size(X)
     X = X - repmat(mean(X, 1), n, 1)
     C = (X' * X) ./ (size(X,1)-1)
@@ -105,8 +107,9 @@ end
     Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to `ndims` dimensions.
     Diffrent from orginal, default is to not use PCA
 """
-function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_iter::Integer = 1000, perplexity::Number = 30.0)
-    println("Initial X Shape is : " * string(size(X)))
+function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_iter::Integer = 1000, perplexity::Number = 30.0;
+              verbose::Bool = false, progress::Bool=true)
+    verbose && info("Initial X Shape is $(size(X))")
 
     # Initialize variables
     if(initial_dims>0)
@@ -130,7 +133,9 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
     P = max(P, 1e-12)
 
     # Run iterations
+    progress && (pb = Progress(max_iter, "Computing t-SNE"))
     for iter in 1:max_iter
+        progress && update!(pb, iter)
         # Compute pairwise affinities
         sum_Y = sum(Y.^2, 2)
         num = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
@@ -156,18 +161,20 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
         Y = Y - repmat(mean(Y, 1), n, 1)
 
         # Compute current value of cost function
-        if mod((iter + 1), 10) == 0
+        if verbose && mod((iter + 1), 10) == 0
             logs = log(P ./ Q)
             # Below is a fix so we don't get NaN when the error is computed
             logs = map((x) -> isnan(x) ? 0.0 : x, logs)
             C = sum(P .* logs)
-            println("Iteration ", (iter + 1), ": error is ", C)
+            info("Iteration #$(iter + 1): error is $C")
         end
         # Stop lying about P-values
         if iter == 100
             P = P / 4
         end
     end
+    progress && (finish!(pb))
+
     # Return solution
     return Y
 end
