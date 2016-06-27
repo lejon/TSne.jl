@@ -13,31 +13,36 @@ using ProgressMeter
 export tsne
 
 """
-    Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
+    Compute the perplexity and the i-th column for a specific value of the precision of a Gaussian distribution.
 """
-function Hbeta(D, beta = 1.0)
-    P = exp(-D * beta)
+function Hbeta!(P::AbstractVector, D::Matrix, beta::Number, i::Int)
+    Di = slice(D, :, i)
+    @inbounds for j in eachindex(Di)
+        P[j] = exp(Di[j] * -beta)
+    end
+    P[i] = 0.0
     sumP = sum(P)
-    H = log(sumP) + beta * dot(D, P) / sumP
+    H = log(sumP) + beta * dot(Di, P) / sumP
     scale!(P, 1/sumP)
-    return (H, P)
+    return H
 end
 
 """
     Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
 """
 function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+             max_iter::Integer = 50,
              verbose::Bool=false, progress::Bool=true)
     verbose && info("Computing pairwise distances...")
     (n, d) = size(X)
     sum_XX = sumabs2(X, 2)
-    D = (-2 * (X * X') .+ sum_XX)' .+ sum_XX
+    D = -2 * (X*X') .+ sum_XX .+ sum_XX'
     P = zeros(n, n)
+    Pcol = zeros(n)
     beta = ones(n)
     logU = log(perplexity)
 
     # Loop over all datapoints
-    range = collect(1:n)
     progress && (pb = Progress(n, "Computing point perplexities"))
     for i in 1:n
         progress && update!(pb, i)
@@ -47,15 +52,12 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
         betamin = -Inf
         betamax =  Inf
 
-        inds = range[range .!=i]
-        Di = squeeze(D[i, inds], 1)
-        (H, thisP) = Hbeta(Di, betai)
+        H = Hbeta!(Pcol, D, betai, i)
+        Hdiff = H - logU
 
         # Evaluate whether the perplexity is within tolerance
-        Hdiff = H - logU
         tries = 0
-        while abs(Hdiff) > tol && tries < 50
-
+        while abs(Hdiff) > tol && tries < max_iter
             # If not, increase or decrease precision
             if Hdiff > 0
                 betamin = betai
@@ -66,13 +68,13 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
             end
 
             # Recompute the values
-            (H, thisP) = Hbeta(Di, betai)
+            H = Hbeta!(Pcol, D, betai, i)
             Hdiff = H - logU
             tries += 1
         end
         verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
-        # Set the final row of P
-        P[i, inds] = thisP
+        # Set the final column of P
+        P[:, i] = Pcol
         beta[i] = betai
     end
     progress && finish!(pb)
@@ -99,10 +101,12 @@ function pca{T}(X::Matrix{T}, ndims::Integer = 50)
 end
 
 """
-    Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to `ndims` dimensions.
-    Diffrent from orginal, default is to not use PCA
+    Apply t-SNE to `X`, i.e. embed its points into `ndims` dimensions
+    preserving close neighbours.
+    Different from the orginal implementation,
+    the default is not to use PCA for initialization.
 """
-function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_iter::Integer = 1000, perplexity::Number = 30.0;
+function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
               verbose::Bool = false, progress::Bool=true)
     verbose && info("Initial X Shape is $(size(X))")
 
@@ -121,23 +125,27 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
     gains = ones(n, ndims)
 
     # Compute P-values
-    P = x2p(X, 1e-5, perplexity)
+    P = x2p(X, 1e-5, perplexity, verbose=verbose, progress=progress)
     P = P + P'
     scale!(P, 1.0/sum(P))
     scale!(P, 4)                        # early exaggeration
     P = max(P, 1e-12)
     L = similar(P)
+    Ymean = zeros(1, ndims)
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
+    Q = similar(P)
     for iter in 1:max_iter
         progress && update!(pb, iter)
         # Compute pairwise affinities
-        sum_YY = sumabs2(Y, 2)
-        Q = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_YY)' .+ sum_YY)
-        # Setting diagonal to zero
-        @inbounds for i in 1:size(Q, 1)
-            Q[i,i] = 0.0
+        sum_YY = squeeze(sumabs2(Y, 2), 2)
+        # FIXME profiling indicates a lot of time is lost in copytri!()
+        A_mul_Bt!(Q, Y, Y)
+        @inbounds for j in 1:size(Q, 2)
+            for i in 1:(j-1)
+                Q[j,i] = Q[i,j] = 1.0 / (1.0 - 2.0 * Q[i,j] + sum_YY[i] + sum_YY[j])
+            end
         end
         sum_Q = sum(Q)
 
@@ -145,8 +153,12 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
         @inbounds for i in eachindex(P)
             L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
         end
-        A_mul_B!(dY, (diagm(sum(L, 1)[:,]) - L), Y)
-        scale!(dY, 4)
+        Lcolsums = squeeze(sum(L, 1), 1)
+        for (i, ldiag) in enumerate(Lcolsums)
+            L[i, i] -= ldiag
+        end
+        A_mul_B!(dY, L, Y)
+        scale!(dY, -4.0)
 
         # Perform the update
         momentum = iter <= 20 ? initial_momentum : final_momentum
@@ -156,7 +168,13 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
             iY[i] = momentum * iY[i] - eta * (gains[i] * dY[i])
             Y[i] += iY[i]
         end
-        Y = Y - repmat(mean(Y, 1), n, 1)
+        mean!(Ymean, Y)
+        @inbounds for j in 1:size(Y, 2)
+            YcolMean = Ymean[j]
+            for i in 1:size(Y, 1)
+                Y[i,j] -= YcolMean
+            end
+        end
 
         # Compute current value of cost function
         if verbose && mod((iter + 1), max(max_iter÷100, 1) ) == 0
