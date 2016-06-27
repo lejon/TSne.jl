@@ -16,10 +16,10 @@ export tsne, pca
     Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
 """
 function Hbeta(D, beta = 1.0)
-    P = exp(-copy(D) * beta)
+    P = exp(-D * beta)
     sumP = sum(P)
-    H = log(sumP) + beta * sum(D .* P) / sumP
-    P = P / sumP
+    H = log(sumP) + beta * dot(D, P) / sumP
+    scale!(P, 1/sumP)
     return (H, P)
 end
 
@@ -30,25 +30,26 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
              verbose::Bool=false, progress::Bool=true)
     verbose && info("Computing pairwise distances...")
     (n, d) = size(X)
-    sum_X = sum((X.^2),2)
-    D = (-2 * (X * X') .+ sum_X)' .+ sum_X
+    sum_XX = sumabs2(X, 2)
+    D = (-2 * (X * X') .+ sum_XX)' .+ sum_XX
     P = zeros(n, n)
-    beta = ones(n, 1)
+    beta = ones(n)
     logU = log(perplexity)
 
     # Loop over all datapoints
-    range = [1:n]
+    range = collect(1:n)
     progress && (pb = Progress(n, "Computing point perplexities"))
     for i in 1:n
         progress && update!(pb, i)
 
         # Compute the Gaussian kernel and entropy for the current precision
+        betai = beta[i]
         betamin = -Inf
         betamax =  Inf
 
         inds = range[range .!=i]
-        Di = D[i, inds]
-        (H, thisP) = Hbeta(Di, beta[i])
+        Di = squeeze(D[i, inds], 1)
+        (H, thisP) = Hbeta(Di, betai)
 
         # Evaluate whether the perplexity is within tolerance
         Hdiff = H - logU
@@ -57,32 +58,24 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
 
             # If not, increase or decrease precision
             if Hdiff > 0
-                betamin = beta[i]
-                if betamax == Inf || betamax == -Inf
-                    beta[i] = beta[i] * 2
-                else
-                    beta[i] = (beta[i] + betamax) / 2
-                end
+                betamin = betai
+                betai = isfinite(betamax) ? (betai + betamax)/2 : betai*2
             else
-                betamax = beta[i]
-                if betamin == Inf || betamin == -Inf
-                    beta[i] = beta[i] / 2
-                else
-                    beta[i] = (beta[i] + betamin) / 2
-                end
+                betamax = betai
+                betai = isfinite(betamin) ? (betai + betamin)/2 : betai/2
             end
 
             # Recompute the values
-            (H, thisP) = Hbeta(Di, beta[i])
+            (H, thisP) = Hbeta(Di, betai)
             Hdiff = H - logU
-            tries = tries + 1
+            tries += 1
         end
-		verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
+        verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final row of P
         P[i, inds] = thisP
-
+        beta[i] = betai
     end
-	progress && finish!(pb)
+    progress && finish!(pb)
     # Return final P-matrix
     verbose && info("Mean σ=$(mean(sqrt(1 ./ beta)))")
     return P
@@ -112,7 +105,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
     verbose && info("Initial X Shape is $(size(X))")
 
     # Initialize variables
-    if(initial_dims>0)
+    if initial_dims>0
         X = pca(X, initial_dims)
     end
     (n, d) = size(X)
@@ -128,49 +121,51 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
     # Compute P-values
     P = x2p(X, 1e-5, perplexity)
     P = P + P'
-    P = P / sum(P)
-    P = P * 4                        # early exaggeration
+    scale!(P, 1.0/sum(P))
+    scale!(P, 4)                        # early exaggeration
     P = max(P, 1e-12)
+    L = similar(P)
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
     for iter in 1:max_iter
         progress && update!(pb, iter)
         # Compute pairwise affinities
-        sum_Y = sum(Y.^2, 2)
-        num = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
+        sum_YY = sumabs2(Y, 2)
+        Q = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_YY)' .+ sum_YY)
         # Setting diagonal to zero
-        num = num-diagm(diag(num))
-        Q = num / sum(num)
-        Q = max(Q, 1e-12)
+        @inbounds for i in 1:size(Q, 1)
+            Q[i,i] = 0.0
+        end
+        sum_Q = sum(Q)
 
         # Compute gradient
-        L = (P - Q) .* num
-        dY = 4 * (diagm(sum(L, 1)[:,]) - L) * Y
+        @inbounds for i in eachindex(P)
+            L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
+        end
+        A_mul_B!(dY, (diagm(sum(L, 1)[:,]) - L), Y)
+        scale!(dY, 4)
 
         # Perform the update
-        if iter <= 20
-            momentum = initial_momentum
-        else
-            momentum = final_momentum
+        momentum = iter <= 20 ? initial_momentum : final_momentum
+        @inbounds for i in eachindex(gains)
+            flag = (dY[i] > 0) == (iY[i] > 0)
+            gains[i] = max(flag ? gains[i] * 0.8 : gains[i] + 0.2, min_gain)
+            iY[i] = momentum * iY[i] - eta * (gains[i] * dY[i])
+            Y[i] += iY[i]
         end
-        gains = (gains + 0.2) .* ((dY .> 0) .!= (iY .> 0)) + (gains * 0.8) .* ((dY .> 0) .== (iY .> 0))
-        gains[gains .< min_gain] = min_gain
-        iY = momentum .* iY - eta .* (gains .* dY)
-        Y = Y + iY
         Y = Y - repmat(mean(Y, 1), n, 1)
 
         # Compute current value of cost function
         if verbose && mod((iter + 1), 10) == 0
-            logs = log(P ./ Q)
-            # Below is a fix so we don't get NaN when the error is computed
-            logs = map((x) -> isnan(x) ? 0.0 : x, logs)
-            C = sum(P .* logs)
-            info("Iteration #$(iter + 1): error is $C")
+            err = sum(pq -> pq[1] > 0.0 && pq[2] > 0.0 && sum_Q > 0.0 ?
+                      pq[1]*log(pq[1]/pq[2]*sum_Q)::Float64 : 0.0,
+                      zip(P, Q))
+            info("Iteration #$(iter + 1): error is $err")
         end
-        # Stop lying about P-values
-        if iter == 100
-            P = P / 4
+        # stop cheating with P-values
+        if iter == min(max_iter, 100)
+            scale!(P, 1/4)
         end
     end
     progress && (finish!(pb))
