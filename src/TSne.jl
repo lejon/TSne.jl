@@ -24,7 +24,7 @@ end
 """
     Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
 """
-function x2p(X, tol = 1e-5, perplexity = 30.0)
+function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0)
     println("Computing pairwise distances...")
     (n, d) = size(X)
     sum_X = sum((X.^2),2)
@@ -89,14 +89,14 @@ end
 """
     Runs PCA on the NxD array X in order to reduce its dimensionality to `ndims` dimensions.
 """
-function pca(X, ndims = 50)
+function pca{T}(X::Matrix{T}, ndims::Integer = 50)
     println("Preprocessing the data using PCA...")
     (n, d) = size(X)
     X = X - repmat(mean(X, 1), n, 1)
     C = (X' * X) ./ (size(X,1)-1)
-    (l, M) = eig(C)
-    sorder = sortperm(l,rev=true)
-    M = M[:,sorder]
+    l, M = eig(C)
+    sorder = sortperm(l, rev=true)
+    M = M[:, sorder]::Matrix{T}
     Y = X * M[:, 1:min(d, ndims)]
     return Y
 end
@@ -105,7 +105,7 @@ end
     Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to `ndims` dimensions.
     Diffrent from orginal, default is to not use PCA
 """
-function tsne(X, ndims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
+function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_iter::Integer = 1000, perplexity::Number = 30.0)
     println("Initial X Shape is : " * string(size(X)))
 
     # Initialize variables
