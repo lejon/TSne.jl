@@ -157,7 +157,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = -1, max_ite
         Y = Y - repmat(mean(Y, 1), n, 1)
 
         # Compute current value of cost function
-        if verbose && mod((iter + 1), 10) == 0
+        if verbose && mod((iter + 1), max(max_iter÷100, 1) ) == 0
             err = sum(pq -> pq[1] > 0.0 && pq[2] > 0.0 && sum_Q > 0.0 ?
                       pq[1]*log(pq[1]/pq[2]*sum_Q)::Float64 : 0.0,
                       zip(P, Q))
