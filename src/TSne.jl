@@ -10,7 +10,7 @@ using ProgressMeter
 #
 #  This is a straight off Julia port of Laurens van der Maatens python implementation of tsne
 
-export tsne, pca
+export tsne
 
 """
     Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
@@ -82,7 +82,9 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
 end
 
 """
-    Runs PCA on the NxD array X in order to reduce its dimensionality to `ndims` dimensions.
+    Runs PCA on the NxD array `X` in order to reduce its dimensionality to `ndims` dimensions.
+
+    FIXME use PCA routine from JuliaStats?
 """
 function pca{T}(X::Matrix{T}, ndims::Integer = 50)
     info("Preprocessing the data using PCA...")
