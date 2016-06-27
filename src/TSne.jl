@@ -87,9 +87,9 @@ function x2p(X, tol = 1e-5, perplexity = 30.0)
 end
 
 """
-    Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
+    Runs PCA on the NxD array X in order to reduce its dimensionality to `ndims` dimensions.
 """
-function pca(X, no_dims = 50)
+function pca(X, ndims = 50)
     println("Preprocessing the data using PCA...")
     (n, d) = size(X)
     X = X - repmat(mean(X, 1), n, 1)
@@ -97,16 +97,15 @@ function pca(X, no_dims = 50)
     (l, M) = eig(C)
     sorder = sortperm(l,rev=true)
     M = M[:,sorder]
-    ret_dims = no_dims > d ? d : no_dims
-    Y = X * M[:,1:ret_dims]
+    Y = X * M[:, 1:min(d, ndims)]
     return Y
 end
 
 """
-    Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to no_dims dimensions.
+    Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to `ndims` dimensions.
     Diffrent from orginal, default is to not use PCA
 """
-function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
+function tsne(X, ndims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
     println("Initial X Shape is : " * string(size(X)))
 
     # Initialize variables
@@ -118,10 +117,10 @@ function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 3
     final_momentum = 0.8
     eta = 500
     min_gain = 0.01
-    Y = randn(n, no_dims)
-    dY = zeros(n, no_dims)
-    iY = zeros(n, no_dims)
-    gains = ones(n, no_dims)
+    Y = randn(n, ndims)
+    dY = zeros(n, ndims)
+    iY = zeros(n, ndims)
+    gains = ones(n, ndims)
 
     # Compute P-values
     P = x2p(X, 1e-5, perplexity)
