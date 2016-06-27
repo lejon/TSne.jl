@@ -107,9 +107,9 @@ end
     the default is not to use PCA for initialization.
 """
 function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
-              min_gain::Number = 0.01, eta::Number = 500.0,
-              initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 20,
-              stop_cheat_iter::Integer = 100, cheat_scale::Number = 4.0,
+              min_gain::Number = 0.01, eta::Number = 200.0,
+              initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
+              stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true)
     verbose && info("Initial X Shape is $(size(X))")
 
