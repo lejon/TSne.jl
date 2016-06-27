@@ -107,6 +107,9 @@ end
     the default is not to use PCA for initialization.
 """
 function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
+              min_gain::Number = 0.01, eta::Number = 500.0,
+              initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 20,
+              stop_cheat_iter::Integer = 100, cheat_scale::Number = 4.0,
               verbose::Bool = false, progress::Bool=true)
     verbose && info("Initial X Shape is $(size(X))")
 
@@ -115,10 +118,6 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         X = pca(X, initial_dims)
     end
     (n, d) = size(X)
-    initial_momentum = 0.5
-    final_momentum = 0.8
-    eta = 500
-    min_gain = 0.01
     Y = randn(n, ndims)
     dY = zeros(n, ndims)
     iY = zeros(n, ndims)
@@ -128,7 +127,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
     P = x2p(X, 1e-5, perplexity, verbose=verbose, progress=progress)
     P = P + P'
     scale!(P, 1.0/sum(P))
-    scale!(P, 4)                        # early exaggeration
+    scale!(P, cheat_scale)  # early exaggeration
     P = max(P, 1e-12)
     L = similar(P)
     Ymean = zeros(1, ndims)
@@ -161,7 +160,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         scale!(dY, -4.0)
 
         # Perform the update
-        momentum = iter <= 20 ? initial_momentum : final_momentum
+        momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
         @inbounds for i in eachindex(gains)
             flag = (dY[i] > 0) == (iY[i] > 0)
             gains[i] = max(flag ? gains[i] * 0.8 : gains[i] + 0.2, min_gain)
@@ -184,8 +183,8 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
             info("Iteration #$(iter + 1): error is $err")
         end
         # stop cheating with P-values
-        if iter == min(max_iter, 100)
-            scale!(P, 1/4)
+        if iter == min(max_iter, stop_cheat_iter)
+            scale!(P, 1/cheat_scale)
         end
     end
     progress && (finish!(pb))
