@@ -40,7 +40,7 @@ println("Y dimensions are: " * string(size(Y)))
 
 writecsv(plotname*"_tsne_out.csv",Y)
 lbloutfile = open("labels.txt", "w")
-write(lbloutfile,labels,"\n")
+writedlm(lbloutfile,labels)
 close(lbloutfile)
 
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
