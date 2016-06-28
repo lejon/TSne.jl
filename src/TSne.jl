@@ -143,12 +143,12 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
     Ymean = zeros(1, ndims)
     sum_YY = zeros(n, 1)
     Lcolsums = zeros(n, 1)
+    last_kldiv = NaN
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
     Q = similar(P)
     for iter in 1:max_iter
-        progress && update!(pb, iter)
         # Compute pairwise affinities
         sumabs2!(sum_YY, Y)
         # FIXME profiling indicates a lot of time is lost in copytri!()
@@ -189,16 +189,16 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         end
 
         # Compute current value of cost function
-        if verbose && (iter == max_iter || mod(iter, max(max_iter÷20, 10)) == 0)
+        if progress && (!isfinite(last_kldiv) || iter == max_iter || mod(iter, max(max_iter÷20, 10)) == 0)
             local kldiv = 0.0
             @inbounds @simd for i in eachindex(P)
                 if (p = P[i]) > 0.0 && (q = Q[i]) > 0.0
                     kldiv += p*log(p/q)
                 end
             end
-            kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
-            info("Iteration #$(iter + 1): KL-divergence is $kldiv")
+            last_kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
         end
+        progress && update!(pb, iter, showvalues = Dict(:KL_divergence => last_kldiv))
         # stop cheating with P-values
         if iter == min(max_iter, stop_cheat_iter)
             scale!(P, 1/sum_P)
@@ -206,6 +206,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         end
     end
     progress && (finish!(pb))
+    verbose && info("Final t-SNE KL-divergence=$last_kldiv")
 
     # Return solution
     return Y
