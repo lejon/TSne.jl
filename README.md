@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/lejon/TSne.jl.svg?branch=master)](https://travis-ci.org/lejon/TSne.jl) 
+
 julia-tsne
 ==========
 
