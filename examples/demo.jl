@@ -1,4 +1,4 @@
-using Gadfly 
+using Gadfly
 using TSne
 
 if length(ARGS)==0 
@@ -22,6 +22,7 @@ if use_iris
 else
     using MNIST
     X, labels = traindata()
+    labels = labels[1:2500]
     X = X'
     X = X[1:2500,:]
     Xcenter = X - mean(X)
@@ -37,8 +38,12 @@ println("X dimensions are: " * string(size(X)))
 Y = tsne(X, 2, initial_dims, iterations, perplexity)
 println("Y dimensions are: " * string(size(Y)))
 
+writecsv(plotname*"_tsne_out.csv",Y)
+lbloutfile = open("labels.txt", "w")
+write(lbloutfile,labels,"\n")
+close(lbloutfile)
+
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 
-writecsv(plotname*"_tsne_out.csv",Y)
-draw(PDF(plotname*".pdf", 4inch, 3inch), theplot)
+#draw(PDF(plotname*".pdf", 4inch, 3inch), theplot)
 draw(SVG(plotname*".svg", 4inch, 3inch), theplot)
