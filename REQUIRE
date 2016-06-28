@@ -1,0 +1,5 @@
+julia 0.4
+FactCheck
+RDatasets
+MNIST
+ProgressMeter

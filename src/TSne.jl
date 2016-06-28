@@ -1,5 +1,7 @@
 module TSne
 
+using ProgressMeter
+
 # Numpy Math.sum => axis = 0 => sum down the columns. axis = 1 => sum along the rows
 # Julia Base.sum => axis = 1 => sum down the columns. axis = 2 => sum along the rows
 
@@ -8,162 +10,187 @@ module TSne
 #
 #  This is a straight off Julia port of Laurens van der Maatens python implementation of tsne
 
-export tsne, pca
+export tsne
 
-function Hbeta(D, beta = 1.0)
-	#Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
-	P = exp(-copy(D) * beta);
-	sumP = sum(P);
-	H = log(sumP) + beta * sum(D .* P) / sumP;
-	P = P / sumP;
-	return (H, P);
+"""
+    Compute the perplexity and the i-th column for a specific value of the precision of a Gaussian distribution.
+"""
+function Hbeta!(P::AbstractVector, D::Matrix, beta::Number, i::Int)
+    Di = slice(D, :, i)
+    @inbounds @simd for j in eachindex(Di)
+        P[j] = exp(Di[j] * -beta)
+    end
+    P[i] = 0.0
+    sumP = sum(P)
+    H = log(sumP) + beta * dot(Di, P) / sumP
+    scale!(P, 1/sumP)
+    return H
 end
 
-function x2p(X, tol = 1e-5, perplexity = 30.0)
-	#Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
-	println("Computing pairwise distances...")
-	(n, d) = size(X)
-	sum_X = sum((X.^2),2)
-	D = (-2 * (X * X') .+ sum_X)' .+ sum_X
-	P = zeros(n, n)
-	beta = ones(n, 1)
-	logU = log(perplexity)
+"""
+    Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
+"""
+function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+             max_iter::Integer = 50,
+             verbose::Bool=false, progress::Bool=true)
+    verbose && info("Computing pairwise distances...")
+    (n, d) = size(X)
+    sum_XX = sumabs2(X, 2)
+    D = -2 * (X*X') .+ sum_XX .+ sum_XX'
+    P = zeros(n, n)
+    Pcol = zeros(n)
+    beta = ones(n)
+    logU = log(perplexity)
 
-	# Loop over all datapoints
-	range = [1:n]
-	for i in 1:n
+    # Loop over all datapoints
+    progress && (pb = Progress(n, "Computing point perplexities"))
+    for i in 1:n
+        progress && update!(pb, i)
 
-		# Print progress
-		if mod(i, 500) == 0
-			println("Computing P-values for point " * string(i) *  " of " * string(n) * "...")
-        	end
+        # Compute the Gaussian kernel and entropy for the current precision
+        betai = beta[i]
+        betamin = -Inf
+        betamax =  Inf
 
-		# Compute the Gaussian kernel and entropy for the current precision
-		betamin = -Inf;
-		betamax =  Inf;
+        H = Hbeta!(Pcol, D, betai, i)
+        Hdiff = H - logU
 
-		inds = range[range .!=i]
-		Di = D[i, inds]
-		(H, thisP) = Hbeta(Di, beta[i])
+        # Evaluate whether the perplexity is within tolerance
+        tries = 0
+        while abs(Hdiff) > tol && tries < max_iter
+            # If not, increase or decrease precision
+            if Hdiff > 0
+                betamin = betai
+                betai = isfinite(betamax) ? (betai + betamax)/2 : betai*2
+            else
+                betamax = betai
+                betai = isfinite(betamin) ? (betai + betamin)/2 : betai/2
+            end
 
-		# Evaluate whether the perplexity is within tolerance
-		Hdiff = H - logU;
-		tries = 0;
-		while abs(Hdiff) > tol && tries < 50
-
-			# If not, increase or decrease precision
-			if Hdiff > 0
-				betamin = beta[i]
-				if betamax == Inf || betamax == -Inf
-					beta[i] = beta[i] * 2;
-				else
-					beta[i] = (beta[i] + betamax) / 2
-				end
-			else
-				betamax = beta[i];
-				if betamin == Inf || betamin == -Inf
-					beta[i] = beta[i] / 2;
-				else
-					beta[i] = (beta[i] + betamin) / 2
-				end
-			end
-
-			# Recompute the values
-			(H, thisP) = Hbeta(Di, beta[i])
-			Hdiff = H - logU
-			tries = tries + 1;
-		end
-		# Set the final row of P
-  		P[i, inds] = thisP
-
-	end
-	# Return final P-matrix
-	println("Mean value of sigma: " * string(mean(sqrt(1 ./ beta))))
-	return P
+            # Recompute the values
+            H = Hbeta!(Pcol, D, betai, i)
+            Hdiff = H - logU
+            tries += 1
+        end
+        verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
+        # Set the final column of P
+        P[:, i] = Pcol
+        beta[i] = betai
+    end
+    progress && finish!(pb)
+    # Return final P-matrix
+    verbose && info("Mean σ=$(mean(sqrt(1 ./ beta)))")
+    return P
 end
 
-function pca(X, no_dims = 50)
-	#Runs PCA on the NxD array X in order to reduce its dimensionality to no_dims dimensions.
+"""
+    Runs PCA on the NxD array `X` in order to reduce its dimensionality to `ndims` dimensions.
 
-	println("Preprocessing the data using PCA...")
-	(n, d) = size(X)
-	X = X - repmat(mean(X, 1), n, 1)
-	C = (X' * X) ./ (size(X,1)-1)
-	(l, M) = eig(C)
-	sorder = sortperm(l,rev=true)
-	M = M[:,sorder]
-	ret_dims = no_dims > d ? d : no_dims
-	Y = X * M[:,1:ret_dims]
-	return Y
+    FIXME use PCA routine from JuliaStats?
+"""
+function pca{T}(X::Matrix{T}, ndims::Integer = 50)
+    info("Preprocessing the data using PCA...")
+    (n, d) = size(X)
+    X = X - repmat(mean(X, 1), n, 1)
+    C = (X' * X) ./ (size(X,1)-1)
+    l, M = eig(C)
+    sorder = sortperm(l, rev=true)
+    M = M[:, sorder]::Matrix{T}
+    Y = X * M[:, 1:min(d, ndims)]
+    return Y
 end
 
-function tsne(X, no_dims = 2, initial_dims = -1, max_iter = 1000, perplexity = 30.0)
-	#Runs t-SNE on the dataset in the NxD array X to reduce its dimensionality to no_dims dimensions.
-	# Diffrent from orginal, default is to not use PCA
-	println("Initial X Shape is : " * string(size(X)))
+"""
+    Apply t-SNE to `X`, i.e. embed its points into `ndims` dimensions
+    preserving close neighbours.
+    Different from the orginal implementation,
+    the default is not to use PCA for initialization.
+"""
+function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
+              min_gain::Number = 0.01, eta::Number = 200.0,
+              initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
+              stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
+              verbose::Bool = false, progress::Bool=true)
+    verbose && info("Initial X Shape is $(size(X))")
 
-	# Initialize variables
-	if(initial_dims>0)
-		X = pca(X, initial_dims)
-	end
-	(n, d) = size(X);
-	initial_momentum = 0.5
-	final_momentum = 0.8
-	eta = 500
-	min_gain = 0.01
-	Y = randn(n, no_dims)
-	dY = zeros(n, no_dims)
-	iY = zeros(n, no_dims)
-	gains = ones(n, no_dims)
+    # Initialize variables
+    if initial_dims>0
+        X = pca(X, initial_dims)
+    end
+    (n, d) = size(X)
+    Y = randn(n, ndims)
+    dY = zeros(n, ndims)
+    iY = zeros(n, ndims)
+    gains = ones(n, ndims)
 
-	# Compute P-values
-	P = x2p(X, 1e-5, perplexity);
-	P = P + P'
-	P = P / sum(P);
-	P = P * 4;						# early exaggeration
-	P = max(P, 1e-12);
+    # Compute P-values
+    P = x2p(X, 1e-5, perplexity, verbose=verbose, progress=progress)
+    P = P + P'
+    scale!(P, 1.0/sum(P))
+    scale!(P, cheat_scale)  # early exaggeration
+    P = max(P, 1e-12)
+    L = similar(P)
+    Ymean = zeros(1, ndims)
 
-	# Run iterations
-	for iter in 1:max_iter
-		# Compute pairwise affinities
-		sum_Y = sum(Y.^2, 2)
-		num = 1 ./ (1 + ((-2 * (Y * Y')) .+ sum_Y)' .+ sum_Y)
-		# Setting diagonal to zero
-		num = num-diagm(diag(num))
-		Q = num / sum(num)
-		Q = max(Q, 1e-12)
+    # Run iterations
+    progress && (pb = Progress(max_iter, "Computing t-SNE"))
+    Q = similar(P)
+    for iter in 1:max_iter
+        progress && update!(pb, iter)
+        # Compute pairwise affinities
+        sum_YY = squeeze(sumabs2(Y, 2), 2)
+        # FIXME profiling indicates a lot of time is lost in copytri!()
+        A_mul_Bt!(Q, Y, Y)
+        @inbounds for j in 1:size(Q, 2)
+            @simd for i in 1:(j-1)
+                Q[j,i] = Q[i,j] = 1.0 / (1.0 - 2.0 * Q[i,j] + sum_YY[i] + sum_YY[j])
+            end
+        end
+        sum_Q = sum(Q)
 
-		# Compute gradient
-		L = (P - Q) .* num;
-    		dY = 4 * (diagm(sum(L, 1)[:,]) - L) * Y
+        # Compute gradient
+        @inbounds @simd for i in eachindex(P)
+            L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
+        end
+        Lcolsums = squeeze(sum(L, 1), 1)
+        for (i, ldiag) in enumerate(Lcolsums)
+            L[i, i] -= ldiag
+        end
+        A_mul_B!(dY, L, Y)
+        scale!(dY, -4.0)
 
-		# Perform the update
-		if iter <= 20
-			momentum = initial_momentum
-		else
-			momentum = final_momentum
-		end
-		gains = (gains + 0.2) .* ((dY .> 0) .!= (iY .> 0)) + (gains * 0.8) .* ((dY .> 0) .== (iY .> 0))
-		gains[gains .< min_gain] = min_gain
-		iY = momentum .* iY - eta .* (gains .* dY);
-		Y = Y + iY;
-		Y = Y - repmat(mean(Y, 1), n, 1);
+        # Perform the update
+        momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
+        @inbounds for i in eachindex(gains)
+            flag = (dY[i] > 0) == (iY[i] > 0)
+            gains[i] = max(flag ? gains[i] * 0.8 : gains[i] + 0.2, min_gain)
+            iY[i] = momentum * iY[i] - eta * (gains[i] * dY[i])
+            Y[i] += iY[i]
+        end
+        mean!(Ymean, Y)
+        @inbounds for j in 1:size(Y, 2)
+            YcolMean = Ymean[j]
+            for i in 1:size(Y, 1)
+                Y[i,j] -= YcolMean
+            end
+        end
 
-		# Compute current value of cost function
-		if mod((iter + 1), 10) == 0
-			logs = log(P ./ Q)
-			# Below is a fix so we don't get NaN when the error is computed
-			logs = map((x) -> isnan(x) ? 0.0 : x, logs)
-			C = sum(P .* logs);
-			println("Iteration ", (iter + 1), ": error is ", C)
-		end
-		# Stop lying about P-values
-		if iter == 100
-			P = P / 4;
-		end
-    	end
-	# Return solution
-	return Y;
-	end
+        # Compute current value of cost function
+        if verbose && mod((iter + 1), max(max_iter÷100, 1) ) == 0
+            err = sum(pq -> pq[1] > 0.0 && pq[2] > 0.0 && sum_Q > 0.0 ?
+                      pq[1]*log(pq[1]/pq[2]*sum_Q)::Float64 : 0.0,
+                      zip(P, Q))
+            info("Iteration #$(iter + 1): error is $err")
+        end
+        # stop cheating with P-values
+        if iter == min(max_iter, stop_cheat_iter)
+            scale!(P, 1/cheat_scale)
+        end
+    end
+    progress && (finish!(pb))
+
+    # Return solution
+    return Y
+end
 
 end
