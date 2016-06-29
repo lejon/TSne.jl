@@ -141,6 +141,8 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
     P = max(P, 1e-12)
     L = similar(P)
     Ymean = zeros(1, ndims)
+    sum_YY = zeros(n, 1)
+    Lcolsums = zeros(n, 1)
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
@@ -148,7 +150,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
     for iter in 1:max_iter
         progress && update!(pb, iter)
         # Compute pairwise affinities
-        sum_YY = squeeze(sumabs2(Y, 2), 2)
+        sumabs2!(sum_YY, Y)
         # FIXME profiling indicates a lot of time is lost in copytri!()
         A_mul_Bt!(Q, Y, Y)
         @inbounds for j in 1:size(Q, 2)
@@ -162,7 +164,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         @inbounds @simd for i in eachindex(P)
             L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
         end
-        Lcolsums = squeeze(sum(L, 1), 1)
+        sum!(Lcolsums, L)
         for (i, ldiag) in enumerate(Lcolsums)
             L[i, i] -= ldiag
         end
