@@ -114,6 +114,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
     verbose && info("Initial X Shape is $(size(X))")
 
     # Initialize variables
+    X = scale(X, 1.0/std(X))
     if initial_dims>0
         X = pca(X, initial_dims)
     end
