@@ -154,8 +154,9 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         # FIXME profiling indicates a lot of time is lost in copytri!()
         A_mul_Bt!(Q, Y, Y)
         @inbounds for j in 1:size(Q, 2)
+            Q[j,j] = 0.0
             @simd for i in 1:(j-1)
-                Q[j,i] = Q[i,j] = 1.0 / (1.0 - 2.0 * Q[i,j] + sum_YY[i] + sum_YY[j])
+                Q[j,i] = Q[i,j] = 1.0 / max(1.0, 1.0 - 2.0 * Q[i,j] + sum_YY[i] + sum_YY[j])
             end
         end
         sum_Q = sum(Q)
