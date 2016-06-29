@@ -15,14 +15,14 @@ export tsne
 """
     Compute the perplexity and the i-th column for a specific value of the precision of a Gaussian distribution.
 """
-function Hbeta!(P::AbstractVector, D::Matrix, beta::Number, i::Int)
-    Di = slice(D, :, i)
-    @inbounds @simd for j in eachindex(Di)
-        P[j] = exp(Di[j] * -beta)
+function Hbeta!(P::AbstractVector, D::AbstractVector, Doffset::Number, beta::Number)
+    @inbounds @simd for j in eachindex(D)
+        P[j] = exp(-beta * D[j])
     end
-    P[i] = 0.0
     sumP = sum(P)
-    H = log(sumP) + beta * dot(Di, P) / sumP
+    @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P[$i]: sum=$sumP, beta=$beta"
+    H = -beta*Doffset + log(sumP) + beta * dot(D, P) / sumP
+    @assert isfinite(H) "Degenerated H"
     scale!(P, 1/sumP)
     return H
 end
@@ -37,6 +37,7 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
     (n, d) = size(X)
     sum_XX = sumabs2(X, 2)
     D = -2 * (X*X') .+ sum_XX .+ sum_XX'
+    Di = zeros(n)
     P = zeros(n, n)
     Pcol = zeros(n)
     beta = ones(n)
@@ -52,7 +53,14 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
         betamin = -Inf
         betamax =  Inf
 
-        H = Hbeta!(Pcol, D, betai, i)
+        copy!(Di, slice(D, :, i))
+        Di[i] = prevfloat(Inf) # exclude D[i,i] from minimum(), yet make it finite and exp(-D[i,i])==0.0
+        minD = minimum(Di) # distance of i-th point to its closest neighbour
+        @inbounds @simd for j in eachindex(Di)
+            Di[j] -= minD
+        end
+
+        H = Hbeta!(Pcol, Di, minD, betai)
         Hdiff = H - logU
 
         # Evaluate whether the perplexity is within tolerance
@@ -68,12 +76,13 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
             end
 
             # Recompute the values
-            H = Hbeta!(Pcol, D, betai, i)
+            H = Hbeta!(Pcol, Di, minD, betai)
             Hdiff = H - logU
             tries += 1
         end
         verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final column of P
+        @assert Pcol[i] == 0.0 "Diagonal probability P[$i,$i]=$(Pcol[i]) not zero"
         P[:, i] = Pcol
         beta[i] = betai
     end
