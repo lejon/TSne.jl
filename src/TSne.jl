@@ -189,11 +189,15 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         end
 
         # Compute current value of cost function
-        if verbose && mod((iter + 1), max(max_iter÷100, 1) ) == 0
-            err = sum(pq -> pq[1] > 0.0 && pq[2] > 0.0 && sum_Q > 0.0 ?
-                      pq[1]*log(pq[1]/pq[2]*sum_Q)::Float64 : 0.0,
-                      zip(P, Q))
-            info("Iteration #$(iter + 1): error is $err")
+        if verbose && (iter == max_iter || mod(iter, max(max_iter÷20, 10)) == 0)
+            local kldiv = 0.0
+            @inbounds @simd for i in eachindex(P)
+                if (p = P[i]) > 0.0 && (q = Q[i]) > 0.0
+                    kldiv += p*log(p/q)
+                end
+            end
+            kldiv = kldiv + log(sum_Q) # adjust wrt Q scale
+            info("Iteration #$(iter + 1): KL-divergence is $kldiv")
         end
         # stop cheating with P-values
         if iter == min(max_iter, stop_cheat_iter)
