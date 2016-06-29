@@ -165,7 +165,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
             L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
         end
         sum!(Lcolsums, L)
-        for (i, ldiag) in enumerate(Lcolsums)
+        @inbounds for (i, ldiag) in enumerate(Lcolsums)
             L[i, i] -= ldiag
         end
         A_mul_B!(dY, L, Y)
@@ -173,7 +173,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
 
         # Perform the update
         momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
-        @inbounds for i in eachindex(gains)
+        @inbounds @simd for i in eachindex(gains)
             flag = (dY[i] > 0) == (iY[i] > 0)
             gains[i] = max(flag ? gains[i] * 0.8 : gains[i] + 0.2, min_gain)
             iY[i] = momentum * iY[i] - eta * (gains[i] * dY[i])
@@ -182,8 +182,8 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
         mean!(Ymean, Y)
         @inbounds for j in 1:size(Y, 2)
             YcolMean = Ymean[j]
-            for i in 1:size(Y, 1)
-                Y[i,j] -= YcolMean
+            @simd for i in 1:size(Y, 1)
+                Y[i, j] -= YcolMean
             end
         end
 
