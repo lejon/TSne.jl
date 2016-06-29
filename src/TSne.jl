@@ -138,7 +138,7 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
     P = P + P'
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
-    P = max(P, 1e-12)
+    sum_P = cheat_scale
     L = similar(P)
     Ymean = zeros(1, ndims)
     sum_YY = zeros(n, 1)
@@ -196,12 +196,13 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
                     kldiv += p*log(p/q)
                 end
             end
-            kldiv = kldiv + log(sum_Q) # adjust wrt Q scale
+            kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
             info("Iteration #$(iter + 1): KL-divergence is $kldiv")
         end
         # stop cheating with P-values
         if iter == min(max_iter, stop_cheat_iter)
-            scale!(P, 1/cheat_scale)
+            scale!(P, 1/sum_P)
+            sum_P = 1.0
         end
     end
     progress && (finish!(pb))
