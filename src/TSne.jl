@@ -115,7 +115,7 @@ end
     the default is not to use PCA for initialization.
 """
 function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
-              min_gain::Number = 0.01, eta::Number = 200.0,
+              min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true)
@@ -129,7 +129,19 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0, max_iter:
         X = pca(X, reduce_dims)
     end
     (n, d) = size(X)
-    Y = randn(n, ndims)
+    if !pca_init
+        verbose && info("Starting with random layout...")
+        Y = randn(n, ndims)
+    else
+        verbose && info("Using the first $ndims components of the data PCA as the initial layout...")
+        if reduce_dims >= ndims
+            Y = X[:, 1:ndims] # reuse X PCA
+        else
+            @assert reduce_dims <= 0 # no X PCA
+            Y = pca(X, ndims)
+        end
+    end
+
     dY = zeros(n, ndims)
     iY = zeros(n, ndims)
     gains = ones(n, ndims)

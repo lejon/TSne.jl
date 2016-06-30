@@ -14,5 +14,9 @@ facts("tsne()") do
         X = Xcenter / Xstd
         Y = tsne(X, 2, 50, 50, 20)
         @fact size(Y) --> (2500, 2)
+        context("PCA for initial layout") do
+            Y = tsne(X, 2, 50, 50, 20, pca_init=true, cheat_scale=1.0, verbose=true)
+            @fact size(Y) --> (2500, 2)
+        end
     end
 end
