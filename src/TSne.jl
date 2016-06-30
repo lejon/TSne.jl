@@ -120,10 +120,11 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0, max_iter:
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true)
     verbose && info("Initial X Shape is $(size(X))")
+    ndims < size(X, 2) || throw(ArgumentError("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
 
     # Initialize variables
     X = scale(X, 1.0/std(X))
-    if reduce_dims>0
+    if reduce_dims>0 && reduce_dims < size(X, 2)
         reduce_dims = max(reduce_dims, ndims)
         verbose && info("Preprocessing the data using PCA...")
         X = pca(X, reduce_dims)
