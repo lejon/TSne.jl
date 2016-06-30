@@ -49,9 +49,9 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
         progress && update!(pb, i)
 
         # Compute the Gaussian kernel and entropy for the current precision
-        betai = beta[i]
-        betamin = -Inf
-        betamax =  Inf
+        betai = 1.0
+        betamin = 0.0
+        betamax = Inf
 
         copy!(Di, slice(D, :, i))
         Di[i] = prevfloat(Inf) # exclude D[i,i] from minimum(), yet make it finite and exp(-D[i,i])==0.0
@@ -72,7 +72,7 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
                 betai = isfinite(betamax) ? (betai + betamax)/2 : betai*2
             else
                 betamax = betai
-                betai = isfinite(betamin) ? (betai + betamin)/2 : betai/2
+                betai = (betai + betamin)/2
             end
 
             # Recompute the values
