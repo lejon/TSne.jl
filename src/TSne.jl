@@ -98,7 +98,6 @@ end
     FIXME use PCA routine from JuliaStats?
 """
 function pca{T}(X::Matrix{T}, ndims::Integer = 50)
-    info("Preprocessing the data using PCA...")
     (n, d) = size(X)
     X = X - repmat(mean(X, 1), n, 1)
     C = (X' * X) ./ (size(X,1)-1)
@@ -115,7 +114,7 @@ end
     Different from the orginal implementation,
     the default is not to use PCA for initialization.
 """
-function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
+function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0, max_iter::Integer = 1000, perplexity::Number = 30.0;
               min_gain::Number = 0.01, eta::Number = 200.0,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
@@ -124,8 +123,10 @@ function tsne(X::Matrix, ndims::Integer = 2, initial_dims::Integer = 0, max_iter
 
     # Initialize variables
     X = scale(X, 1.0/std(X))
-    if initial_dims>0
-        X = pca(X, initial_dims)
+    if reduce_dims>0
+        reduce_dims = max(reduce_dims, ndims)
+        verbose && info("Preprocessing the data using PCA...")
+        X = pca(X, reduce_dims)
     end
     (n, d) = size(X)
     Y = randn(n, ndims)
