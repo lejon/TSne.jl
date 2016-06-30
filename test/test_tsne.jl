@@ -4,6 +4,11 @@ facts("tsne()") do
         X = convert(Matrix, iris[:, 1:4])
         Y = tsne(X, 3, -1, 1500, 15, verbose=true)
         @fact size(Y) --> (150, 3)
+
+        context("no progress bar") do
+            Y = tsne(X, 2, 50, 50, 20, progress=false)
+            @fact size(Y) --> (150, 2)
+        end
     end
 
     context("MNIST.traindata() dataset") do
