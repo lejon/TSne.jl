@@ -31,16 +31,16 @@ function Hbeta!(P::AbstractVector, D::AbstractVector, Doffset::Number, beta::Num
 end
 
 """
-    x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
-        [keyword arguments])
+    perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+                 [keyword arguments])
 
 Convert `n×d` matrix `X` of point coordinates into `n×n` perplexities matrix `P`.
 Performs a binary search to get P-values in such a way that each conditional
 Gaussian has the same perplexity.
 """
-function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
-             max_iter::Integer = 50,
-             verbose::Bool=false, progress::Bool=true)
+function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+                      max_iter::Integer = 50,
+                      verbose::Bool=false, progress::Bool=true)
     verbose && info("Computing pairwise distances...")
     (n, d) = size(X)
     sum_XX = sumabs2(X, 2)
@@ -178,7 +178,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     gains = ones(n, ndims)
 
     # Compute P-values
-    P = x2p(X, 1e-5, perplexity, verbose=verbose, progress=progress)
+    P = perplexities(X, 1e-5, perplexity, verbose=verbose, progress=progress)
     P = P + P'
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
