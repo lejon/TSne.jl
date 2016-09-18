@@ -44,12 +44,12 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
     verbose && info("Computing pairwise distances...")
     (n, d) = size(X)
     sum_XX = sumabs2(X, 2)
-    D = -2 * (X*X') .+ sum_XX .+ sum_XX'
+    D = -2 * (X*X') .+ sum_XX .+ sum_XX' # euclidean distances between the points
+    P = zeros(n, n) # perplexities matrix
+    beta = ones(n)  # vector of Normal distribution precisions for each point
+    logU = log(perplexity) # the log of expected perplexity
     Di = zeros(n)
-    P = zeros(n, n)
     Pcol = zeros(n)
-    beta = ones(n)
-    logU = log(perplexity)
 
     # Loop over all datapoints
     progress && (pb = Progress(n, "Computing point perplexities"))
@@ -150,11 +150,11 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true)
     verbose && info("Initial X Shape is $(size(X))")
-    ndims < size(X, 2) || throw(ArgumentError("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
+    ndims < size(X, 2) || throw(DimensionMismatch("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
 
     # Initialize variables
     X = X * 1.0/std(X) # note that X is copied
-    if reduce_dims>0 && reduce_dims < size(X, 2)
+    if 0<reduce_dims<size(X, 2)
         reduce_dims = max(reduce_dims, ndims)
         verbose && info("Preprocessing the data using PCA...")
         X = pca(X, reduce_dims)
