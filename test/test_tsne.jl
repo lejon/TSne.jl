@@ -41,7 +41,7 @@ facts("tsne()") do
         Xcenter = X - mean(X)
         Xstd = std(X)
         X = Xcenter / Xstd
-        Y = tsne(X, 2, 50, 50, 20, progress=false)
+        Y = tsne(X, 2, 50, 30, 20, progress=true)
         @fact size(Y) --> (2500, 2)
     end
 end
