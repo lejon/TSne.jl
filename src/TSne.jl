@@ -1,6 +1,6 @@
 module TSne
 
-using ProgressMeter
+using ProgressMeter, Compat.view
 
 # Numpy Math.sum => axis = 0 => sum down the columns. axis = 1 => sum along the rows
 # Julia Base.sum => axis = 1 => sum down the columns. axis = 2 => sum along the rows
@@ -53,7 +53,7 @@ function x2p(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
         betamin = 0.0
         betamax = Inf
 
-        copy!(Di, slice(D, :, i))
+        copy!(Di, view(D, :, i))
         Di[i] = prevfloat(Inf) # exclude D[i,i] from minimum(), yet make it finite and exp(-D[i,i])==0.0
         minD = minimum(Di) # distance of i-th point to its closest neighbour
         @inbounds @simd for j in eachindex(Di)
@@ -139,7 +139,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0, max_iter:
     ndims < size(X, 2) || throw(ArgumentError("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
 
     # Initialize variables
-    X = scale(X, 1.0/std(X))
+    X = X * 1.0/std(X) # note that X is copied
     if reduce_dims>0 && reduce_dims < size(X, 2)
         reduce_dims = max(reduce_dims, ndims)
         verbose && info("Preprocessing the data using PCA...")
