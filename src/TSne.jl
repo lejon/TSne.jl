@@ -1,3 +1,5 @@
+__precompile__()
+
 module TSne
 
 using ProgressMeter, Compat.view
