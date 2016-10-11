@@ -21,7 +21,7 @@ if use_iris
     using RDatasets
     println("Using Iris dataset.")
     iris = dataset("datasets","iris")
-    X = array(iris[:,1:4])
+    X = float(convert(Array,iris[:,1:4]))
     labels = iris[:,5]
     plotname = "iris"
     initial_dims = -1
