@@ -23,13 +23,19 @@ For some tips working with t-sne [Klick here] (http://lejon.github.io)
 ```jl
 using TSne, MNIST
 
+function normalize(A)
+	for col in 1:size(A)[2]
+        	std(A[:,col]) == 0 && continue 
+        	A[:,col] = (A[:,col]-mean(A[:,col])) / std(A[:,col])
+	end
+	A
+end
+
 data, labels = traindata()
 data = data'
 data = data[1:2500,:]
 # Normalize the data, this should be done if there are large scale differences in the dataset
-Xcenter = data - mean(data)
-Xstd = std(data)
-X = Xcenter / Xstd
+X = normalize(float(data)) 
 
 Y = tsne(X, 2, 50, 1000, 20.0)
 
