@@ -20,6 +20,14 @@ Options:
 
 """
 
+function normalize(A)
+	for col in 1:size(A)[2]
+        	std(A[:,col]) == 0 && continue 
+        	A[:,col] = (A[:,col]-mean(A[:,col])) / std(A[:,col])
+	end
+	A
+end
+
 using DocOpt
 
 arguments = docopt(doc, version=v"2.0.0")
@@ -43,11 +51,9 @@ if lblcol>0
 end
 
 dataset = df[filter(x -> x!=lblcol,1:ncol(df)),]
-data = convert(Array,dataset)
+data = float(convert(Array,dataset))
 # Normalize the data, this should be done if there are large scale differences in the dataset
-Xcenter = data - mean(data)
-Xstd = std(data)
-X = Xcenter / Xstd
+X = normalize(data) 
 
 # Run t-SNE
 Y = tsne(X, 2, 50, 1000, 20.0)
