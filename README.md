@@ -43,6 +43,6 @@ draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 
 ## Stand Alone Usage
 
-```julia demo-csv.jl haveheader --labelcol=5 iris-headers.csv````
+```julia demo-csv.jl haveheader --labelcol=5 iris-headers.csv```
 
 Creates myplot.pdf with TSne result visuallized using Gadfly.
