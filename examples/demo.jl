@@ -1,6 +1,14 @@
 using Gadfly
 using TSne
 
+function normalize(A)
+	for col in 1:size(A)[2]
+        	std(A[:,col]) == 0 && continue 
+        	A[:,col] = (A[:,col]-mean(A[:,col])) / std(A[:,col])
+	end
+	A
+end
+
 if length(ARGS)==0 
     println("usage:\n\tjulia demo.jl iris\n\tjulia demo.jl mnist")
     exit(0)
@@ -25,9 +33,7 @@ else
     labels = labels[1:2500]
     X = X'
     X = X[1:2500,:]
-    Xcenter = X - mean(X)
-    Xstd = std(X)
-    X = Xcenter / Xstd
+    X = normalize(X)
     plotname = "mnist"
     initial_dims = 50
     iterations = 1000
@@ -45,5 +51,5 @@ close(lbloutfile)
 
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 
-#draw(PDF(plotname*".pdf", 4inch, 3inch), theplot)
-draw(SVG(plotname*".svg", 4inch, 3inch), theplot)
+draw(PDF(plotname*".pdf", 4inch, 3inch), theplot)
+#draw(SVG(plotname*".svg", 4inch, 3inch), theplot)
