@@ -14,11 +14,11 @@ The examples in the 'examples' dir requires you to have Gadfly and RDatasets ins
 
 For some tips working with t-sne [Klick here] (http://lejon.github.io)
 
-Basic installation: 
+## Basic installation: 
 
   `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
   
-Basic usage: 
+## Basic API usage: 
   
 ```jl
 using TSne, MNIST
@@ -40,3 +40,9 @@ draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 ```
 
 ![](example.png)
+
+## Stand Alone Usage
+
+```julia demo-csv.jl haveheader --labelcol=5 iris-headers.csv```
+
+Creates myplot.pdf with TSne result visuallized using Gadfly.
