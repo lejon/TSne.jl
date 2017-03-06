@@ -128,7 +128,7 @@ i.e. embed its points (rows) into `ndims` dimensions preserving close neighbours
 Different from the orginal implementation,
 the default is not to use PCA for initialization.
 
-# Arguments
+### Arguments
 * `reduce_dims` the number of the first dimensions of `X` PCA to use for t-SNE,
   if 0, all available dimension are used
 * `pca_init` whether to use the first `ndims` of `X` PCA as the initial t-SNE layout,
