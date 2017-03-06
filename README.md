@@ -1,24 +1,20 @@
 [![Travis](https://travis-ci.org/lejon/TSne.jl.svg?branch=master)](https://travis-ci.org/lejon/TSne.jl)
 [![Coveralls](https://coveralls.io/repos/github/lejon/TSne.jl/badge.svg?branch=master)](https://coveralls.io/github/lejon/TSne.jl?branch=master)
 
-Julia t-SNE
-===========
+t-SNE (t-Stochastic Neighbor Embedding)
+=======================================
 
-Julia port of L.J.P. van der Maaten and G.E. Hintons T-SNE visualisation technique.
+Julia implementation of L.J.P. van der Maaten and G.E. Hintons [t-SNE visualisation technique](https://lvdmaaten.github.io/tsne/).
 
-Please observe, that it is not extensively tested.
+Please observe that it is not yet extensively tested.
 
-The examples in the 'examples' dir requires you to have Gadfly and RDatasets installed
+The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` Julia packages.
 
-**Please note:** At some point something changed in Julia which caused poor results, it took a while before I noted this but now  I have updated the implementation so that it works again. See the link below for images rendered using this implementation.
-
-For some tips working with t-sne [Klick here] (http://lejon.github.io)
-
-## Basic installation:
+## Installation
 
   `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
 
-## Basic API usage:
+## Basic API usage
 
 ```jl
 using TSne, MNIST
@@ -44,8 +40,12 @@ draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 
 ![](example.png)
 
-## Stand Alone Usage
+## Command line usage
 
 ```julia demo-csv.jl haveheader --labelcol=5 iris-headers.csv```
 
-Creates myplot.pdf with TSne result visuallized using Gadfly.
+Creates `myplot.pdf` with t-SNE result visualized using `Gadfly.jl`.
+
+## See also
+ * [Some tips working with t-SNE](http://lejon.github.io)
+ * [How to Use t-SNE Effectively](http://distill.pub/2016/misread-tsne/)
