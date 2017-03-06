@@ -179,7 +179,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
 
     # Compute P-values
     P = perplexities(X, 1e-5, perplexity, verbose=verbose, progress=progress)
-    P = P + P'
+    P = P + P' # make P symmetric
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
     sum_P = cheat_scale
@@ -191,22 +191,31 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
-    Q = similar(P)
+    Q = zeros(P)
     for iter in 1:max_iter
         # Compute pairwise affinities
         sum!(abs2, sum_YY, Y)
         BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY^T, updates only the upper tri of Q
         @inbounds for j in 1:size(Q, 2)
-            Q[j,j] = 0.0
+            sum_YYj = sum_YY[j]
+            Qj = view(Q, :, j)
+            Qj[j] = 0.0
             @simd for i in 1:(j-1)
-                Q[j,i] = Q[i,j] = 1.0 / max(1.0, 1.0 - 2.0 * Q[i,j] + sum_YY[i] + sum_YY[j])
+                Qj[i] = 1.0 / max(1.0, 1.0 - 2.0 * Qj[i] + sum_YY[i] + sum_YYj)
             end
         end
-        sum_Q = sum(Q)
+        sum_Q = 2*sum(Q) # the diagonal and lower-tri part of Q is zero
 
-        # Compute gradient
-        @inbounds @simd for i in eachindex(P)
-            L[i] = (P[i] - Q[i]/sum_Q) * Q[i]
+        # Compute the gradient
+        inv_sumQ = 1/sum_Q
+        @inbounds for j in 1:size(L, 2)
+            Lj = view(L, :, j)
+            L_j = view(L, j, :)
+            Pj = view(P, :, j)
+            Qj = view(Q, :, j)
+            @simd for i in 1:j
+                L_j[i] = Lj[i] = (Pj[i] - Qj[i]*inv_sumQ) * Qj[i]
+            end
         end
         sum!(Lcolsums, L)
         @inbounds for (i, ldiag) in enumerate(Lcolsums)
@@ -228,18 +237,26 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
         mean!(Ymean, Y)
         @inbounds for j in 1:size(Y, 2)
             YcolMean = Ymean[j]
-            @simd for i in 1:size(Y, 1)
-                Y[i, j] -= YcolMean
+            Yj = view(Y, :, j)
+            @simd for i in eachindex(Yj)
+                Yj[i] -= YcolMean
             end
         end
 
         # Compute current value of cost function
         if progress && (!isfinite(last_kldiv) || iter == max_iter || mod(iter, max(max_iter÷20, 10)) == 0)
             local kldiv = 0.0
-            @inbounds @simd for i in eachindex(P)
-                if (p = P[i]) > 0.0 && (q = Q[i]) > 0.0
-                    kldiv += p*log(p/q)
+            @inbounds for j in 1:size(P, 2)
+                Pj = view(P, :, j)
+                Qj = view(Q, :, j)
+                kldiv_j = 0.0
+                @simd for i in 1:j
+                    if (p = Pj[i]) > 0.0 && (q = Qj[i]) > 0.0
+                        # P and Q are symmetric
+                        kldiv_j += ifelse(i==j, 1, 2)*p*log(p/q)
+                    end
                 end
+                kldiv += kldiv_j
             end
             last_kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
         end
