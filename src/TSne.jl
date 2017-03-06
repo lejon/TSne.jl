@@ -43,7 +43,7 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
                       verbose::Bool=false, progress::Bool=true)
     verbose && info("Computing pairwise distances...")
     (n, d) = size(X)
-    sum_XX = sumabs2(X, 2)
+    sum_XX = sum(abs2, X, 2)
     D = -2 * (X*X') .+ sum_XX .+ sum_XX' # euclidean distances between the points
     P = zeros(n, n) # perplexities matrix
     beta = ones(n)  # vector of Normal distribution precisions for each point
@@ -194,7 +194,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     Q = similar(P)
     for iter in 1:max_iter
         # Compute pairwise affinities
-        sumabs2!(sum_YY, Y)
+        sum!(abs2, sum_YY, Y)
         # FIXME profiling indicates a lot of time is lost in copytri!()
         A_mul_Bt!(Q, Y, Y)
         @inbounds for j in 1:size(Q, 2)
