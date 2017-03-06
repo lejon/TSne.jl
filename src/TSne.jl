@@ -195,8 +195,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     for iter in 1:max_iter
         # Compute pairwise affinities
         sum!(abs2, sum_YY, Y)
-        # FIXME profiling indicates a lot of time is lost in copytri!()
-        A_mul_Bt!(Q, Y, Y)
+        BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY^T, updates only the upper tri of Q
         @inbounds for j in 1:size(Q, 2)
             Q[j,j] = 0.0
             @simd for i in 1:(j-1)
