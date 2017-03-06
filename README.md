@@ -6,7 +6,7 @@ Julia t-SNE
 
 Julia port of L.J.P. van der Maaten and G.E. Hintons T-SNE visualisation technique.
 
-Please observe, that it is not extensively tested. 
+Please observe, that it is not extensively tested.
 
 The examples in the 'examples' dir requires you to have Gadfly and RDatasets installed
 
@@ -14,33 +14,30 @@ The examples in the 'examples' dir requires you to have Gadfly and RDatasets ins
 
 For some tips working with t-sne [Klick here] (http://lejon.github.io)
 
-## Basic installation: 
+## Basic installation:
 
   `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
-  
-## Basic API usage: 
-  
+
+## Basic API usage:
+
 ```jl
 using TSne, MNIST
 
-function normalize(A)
-	for col in 1:size(A)[2]
-        	std(A[:,col]) == 0 && continue 
-        	A[:,col] = (A[:,col]-mean(A[:,col])) / std(A[:,col])
-	end
-	A
+function rescale(A, dim::Integer=1)
+    res = A .- mean(A, dim)
+    res ./= map!(x -> x > 0.0 ? x : 1.0, std(A, dim))
+    res
 end
 
 data, labels = traindata()
-data = data'
-data = data[1:2500,:]
+data = convert(Matrix{Float64}, data[:, 1:2500])'
 # Normalize the data, this should be done if there are large scale differences in the dataset
-X = normalize(float(data)) 
+X = rescale(data, 1)
 
 Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly
-labels = [string(i) for i in labels[1:2500]]
+labels = convert(Vector{String}, labels[1:2500])
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 ```
