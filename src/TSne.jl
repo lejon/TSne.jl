@@ -218,8 +218,10 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
         # Perform the update
         momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
         @inbounds @simd for i in eachindex(gains)
-            flag = (dY[i] > 0) == (iY[i] > 0)
-            gains[i] = max(flag ? gains[i] * 0.8 : gains[i] + 0.2, min_gain)
+            gains[i] = max(ifelse((dY[i] > 0) == (iY[i] > 0),
+                                  gains[i] * 0.8,
+                                  gains[i] + 0.2),
+                           min_gain)
             iY[i] = momentum * iY[i] - eta * (gains[i] * dY[i])
             Y[i] += iY[i]
         end
