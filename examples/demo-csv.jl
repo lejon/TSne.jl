@@ -14,18 +14,20 @@ Usage:
 Options:
   -h --help     Show this screen.
   --version     Show version.
-  --filename=   Path to CSV file 
-  --noheader    The CSV file does not have a header row	
-  --nolabel    The CSV file does not have a label column 
+  --filename=   Path to CSV file
+  --noheader    The CSV file does not have a header row
+  --nolabel    The CSV file does not have a label column
 
 """
 
-function normalize(A)
-	for col in 1:size(A)[2]
-        	std(A[:,col]) == 0 && continue 
-        	A[:,col] = (A[:,col]-mean(A[:,col])) / std(A[:,col])
-	end
-	A
+"""
+Normalize `A` columns, so that the mean and standard deviation
+of each column are 0 and 1, resp.
+"""
+function rescale(A, dim::Integer=1)
+    res = A .- mean(A, dim)
+    res ./= map!(x -> x > 0.0 ? x : 1.0, std(A, dim))
+    res
 end
 
 using DocOpt
@@ -34,35 +36,28 @@ arguments = docopt(doc, version=v"2.0.0")
 dump(arguments)
 
 if nothing==arguments["--labelcol"]
-	lblcol = -1
-else 
-	lblcol = parse(Int64,arguments["--labelcol"])
+    lblcol = -1
+else
+    lblcol = parse(Int64, arguments["--labelcol"])
 end
 
-df = readtable(arguments["<filename>"],header = nothing!=arguments["haveheader"])
+df = readtable(arguments["<filename>"], header = nothing!=arguments["haveheader"])
 
 if nothing!=arguments["--labelcolname"]
-	lblcol = find(x -> x==symbol(arguments["--labelcolname"]),names(df))[1]
+    lblcol = findfirst(x -> x==symbol(arguments["--labelcolname"]), names(df))
 end
 
 println("Data is $df")
-if lblcol>0
-	labels = df[:,lblcol]
-end
+labels = lblcol > 0 ? df[:, lblcol] : nothing
 
-dataset = df[filter(x -> x!=lblcol,1:ncol(df)),]
-data = float(convert(Array,dataset))
+dataset = df[filter(x -> x!=lblcol, 1:ncol(df)), :]
+data = convert(Matrix{Float64}, dataset)
 # Normalize the data, this should be done if there are large scale differences in the dataset
-X = normalize(data) 
+X = rescale(data)
 
 # Run t-SNE
 Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly
-if lblcol>0
-	theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
-else 
-	theplot = plot(x=Y[:,1], y=Y[:,2])
-end
+theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 draw(PDF("myplot.pdf", 8inch, 6inch), theplot)
-

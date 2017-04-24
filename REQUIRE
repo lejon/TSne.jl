@@ -1,6 +1,6 @@
 julia 0.4
 Compat 0.9
-FactCheck
+BaseTestNext
 RDatasets
 MNIST
 ProgressMeter
