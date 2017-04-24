@@ -33,7 +33,7 @@ X = rescale(data, 1)
 Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly
-labels = convert(Vector{String}, labels[1:2500])
+labels = map(string, labels[1:2500])
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
 draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 ```
