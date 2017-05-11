@@ -45,11 +45,11 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
     (n, d) = size(X)
     sum_XX = sum(abs2, X, 2)
     D = -2 * (X*X') .+ sum_XX .+ sum_XX' # euclidean distances between the points
-    P = zeros(n, n) # perplexities matrix
-    beta = ones(n)  # vector of Normal distribution precisions for each point
+    P = zeros(Float64, n, n) # perplexities matrix
+    beta = ones(Float64, n)  # vector of Normal distribution precisions for each point
     logU = log(perplexity) # the log of expected perplexity
-    Di = zeros(n)
-    Pcol = zeros(n)
+    Di = zeros(Float64, n)
+    Pcol = zeros(Float64, n)
 
     # Loop over all datapoints
     progress && (pb = Progress(n, "Computing point perplexities"))
@@ -75,7 +75,7 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
         tries = 0
         while abs(Hdiff) > tol && tries < max_iter
             # If not, increase or decrease precision
-            if Hdiff > 0
+            if Hdiff > 0.0
                 betamin = betai
                 betai = isfinite(betamax) ? (betai + betamax)/2 : betai*2
             else
@@ -153,7 +153,8 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     ndims < size(X, 2) || throw(DimensionMismatch("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
 
     # Initialize variables
-    X = X * 1.0/std(X) # note that X is copied
+    T = eltype(X)
+    X = X * (one(T)/(std(X)::T)) # note that X is copied
     if 0<reduce_dims<size(X, 2)
         reduce_dims = max(reduce_dims, ndims)
         verbose && info("Preprocessing the data using PCA...")
@@ -173,20 +174,20 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
         end
     end
 
-    dY = zeros(n, ndims)
-    iY = zeros(n, ndims)
-    gains = ones(n, ndims)
+    dY = zeros(T, n, ndims)
+    iY = zeros(T, n, ndims)
+    gains = ones(T, n, ndims)
 
     # Compute P-values
-    P = perplexities(X, 1e-5, perplexity, verbose=verbose, progress=progress)
+    P = perplexities(X, 1e-5, perplexity, verbose=verbose, progress=progress)::Matrix{T}
     P = P + P' # make P symmetric
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
     sum_P = cheat_scale
     L = similar(P)
-    Ymean = zeros(1, ndims)
-    sum_YY = zeros(n, 1)
-    Lcolsums = zeros(n, 1)
+    Ymean = zeros(T, 1, ndims)
+    sum_YY = zeros(T, n, 1)
+    Lcolsums = zeros(T, n, 1)
     last_kldiv = NaN
 
     # Run iterations
