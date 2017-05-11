@@ -201,11 +201,12 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
         sum!(abs2, sum_YY, Y)
         BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY^T, updates only the upper tri of Q
         @inbounds for j in 1:size(Q, 2)
-            sum_YYj = sum_YY[j]
+            sum_YYj_p1 = 1.0 + sum_YY[j]
             Qj = view(Q, :, j)
             Qj[j] = 0.0
             @simd for i in 1:(j-1)
-                Qj[i] = 1.0 / max(1.0, 1.0 - 2.0 * Qj[i] + sum_YY[i] + sum_YYj)
+                denom = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
+                Qj[i] = ifelse(denom > 1.0, 1.0 / denom, 1.0)
             end
         end
         sum_Q = 2*sum(Q) # the diagonal and lower-tri part of Q is zero
