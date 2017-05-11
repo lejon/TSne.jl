@@ -187,7 +187,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
     sum_P = cheat_scale
-    L = similar(P)
+    L = zeros(P)
     Ymean = zeros(T, 1, ndims)
     sum_YY = zeros(T, n, 1)
     Lcolsums = zeros(T, n, 1)
@@ -213,21 +213,25 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
 
         # Compute the gradient
         inv_sumQ = 1/sum_Q
+        fill!(Lcolsums, zero(T)) # column sums
+        # fill the upper triangle of L and P
         @inbounds for j in 1:size(L, 2)
             Lj = view(L, :, j)
-            L_j = view(L, j, :)
             Pj = view(P, :, j)
             Qj = view(Q, :, j)
+            Lsumj = zero(T)
             @simd for i in 1:j
-                L_j[i] = Lj[i] = (Pj[i] - Qj[i]*inv_sumQ) * Qj[i]
+                Lj[i] = l = (Pj[i] - Qj[i]*inv_sumQ) * Qj[i]
+                Lcolsums[i] += l
+                Lsumj += l
             end
+            Lcolsums[j] += Lsumj - Lj[j]
         end
-        sum!(Lcolsums, L)
         @inbounds for (i, ldiag) in enumerate(Lcolsums)
             L[i, i] -= ldiag
         end
-        A_mul_B!(dY, L, Y)
-        scale!(dY, -4.0)
+        # dY = -4LY
+        BLAS.symm!('L', 'U', -4.0, L, Y, zero(T), dY)
 
         # Perform the update
         momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
