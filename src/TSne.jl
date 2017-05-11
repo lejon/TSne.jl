@@ -118,6 +118,9 @@ function pca{T}(X::Matrix{T}, ndims::Integer = 50)
     return Y
 end
 
+# K-L divergence element
+kldivel(p, q) = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p))
+
 """
     tsne(X::Matrix, ndims::Integer=2, reduce_dims::Integer=0,
          max_iter::Integer=1000, perplexity::Number=30.0; [keyword arguments])
@@ -251,13 +254,11 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
                 Pj = view(P, :, j)
                 Qj = view(Q, :, j)
                 kldiv_j = 0.0
-                @simd for i in 1:j
-                    if (p = Pj[i]) > 0.0 && (q = Qj[i]) > 0.0
-                        # P and Q are symmetric
-                        kldiv_j += ifelse(i==j, 1, 2)*p*log(p/q)
-                    end
+                @simd for i in 1:(j-1)
+                    # P and Q are symmetric (only the upper triangle used)
+                    kldiv_j += kldivel(Pj[i], Qj[i])
                 end
-                kldiv += kldiv_j
+                kldiv += 2*kldiv_j + kldivel(Pj[j], Q[j])
             end
             last_kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
         end
