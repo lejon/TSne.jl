@@ -19,8 +19,8 @@ Compute the point perplexities `P` given its distances to the other points `D`
 and the precision of Gaussian distribution `beta`.
 """
 function Hbeta!(P::AbstractVector, D::AbstractVector, Doffset::Number, beta::Number)
-    @inbounds @simd for j in eachindex(D)
-        P[j] = exp(-beta * D[j])
+    @simd for j in eachindex(D)
+        @inbounds P[j] = exp(-beta * D[j])
     end
     sumP = sum(P)
     @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P[$i]: sum=$sumP, beta=$beta"
@@ -64,8 +64,8 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
         copy!(Di, view(D, :, i))
         Di[i] = prevfloat(Inf) # exclude D[i,i] from minimum(), yet make it finite and exp(-D[i,i])==0.0
         minD = minimum(Di) # distance of i-th point to its closest neighbour
-        @inbounds @simd for j in eachindex(Di)
-            Di[j] -= minD
+        @simd for j in eachindex(Di)
+            @inbounds Di[j] -= minD
         end
 
         H = Hbeta!(Pcol, Di, minD, betai)
