@@ -119,7 +119,7 @@ function pca{T}(X::Matrix{T}, ndims::Integer = 50)
 end
 
 # K-L divergence element
-kldivel(p, q) = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p))
+kldivel(p, q) = (@fastmath t = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p)); t)
 
 """
     tsne(X::Matrix, ndims::Integer=2, reduce_dims::Integer=0,
@@ -206,7 +206,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
             Qj[j] = 0.0
             @simd for i in 1:(j-1)
                 denom = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
-                Qj[i] = ifelse(denom > 1.0, 1.0 / denom, 1.0)
+                @fastmath Qj[i] = ifelse(denom > 1.0, 1.0 / denom, 1.0)
             end
         end
         sum_Q = 2*sum(Q) # the diagonal and lower-tri part of Q is zero
