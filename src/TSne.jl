@@ -2,7 +2,7 @@ __precompile__()
 
 module TSne
 
-using ProgressMeter, Compat.view
+using ProgressMeter
 
 # Numpy Math.sum => axis = 0 => sum down the columns. axis = 1 => sum along the rows
 # Julia Base.sum => axis = 1 => sum down the columns. axis = 2 => sum along the rows
@@ -96,7 +96,7 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
     end
     progress && finish!(pb)
     # Return final P-matrix
-    verbose && info("Mean σ=$(mean(sqrt(1 ./ beta)))")
+    verbose && info("Mean σ=$(mean(sqrt.(1 ./ beta)))")
     return P
 end
 
