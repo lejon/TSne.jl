@@ -30,7 +30,7 @@
         X = convert(Matrix, iris[:, 1:4])
         # embed in 3D
         info("t14")
-        Y3d = tsne(X, 3, -1, 1500, 15, progress=false)
+        Y3d = tsne(X, 3, -1, 100, 15, progress=false)
         info("t15")
         @test size(Y3d) == (150, 3)
         # embed in 2D
