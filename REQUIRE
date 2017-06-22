@@ -1,6 +1,4 @@
-julia 0.4
-Compat 0.9
-BaseTestNext
+julia 0.5
 RDatasets
 MNIST
 ProgressMeter
