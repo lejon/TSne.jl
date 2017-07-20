@@ -23,7 +23,7 @@ function Hbeta!(P::AbstractVector, D::AbstractVector, beta::Number)
         @inbounds P[j] = exp(-beta * D[j])
     end
     sumP = sum(P)
-    @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P[$i]: sum=$sumP, beta=$beta"
+    @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P: sum=$sumP, beta=$beta"
     H = log(sumP) + beta * dot(D, P) / sumP
     @assert isfinite(H) "Degenerated H"
     scale!(P, 1/sumP)
