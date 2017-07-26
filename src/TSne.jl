@@ -18,13 +18,13 @@ export tsne
 Compute the point perplexities `P` given its distances to the other points `D`
 and the precision of Gaussian distribution `beta`.
 """
-function Hbeta!(P::AbstractVector, D::AbstractVector, Doffset::Number, beta::Number)
+function Hbeta!(P::AbstractVector, D::AbstractVector, beta::Number)
     @simd for j in eachindex(D)
         @inbounds P[j] = exp(-beta * D[j])
     end
     sumP = sum(P)
-    @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P[$i]: sum=$sumP, beta=$beta"
-    H = -beta*Doffset + log(sumP) + beta * dot(D, P) / sumP
+    @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P: sum=$sumP, beta=$beta"
+    H = log(sumP) + beta * dot(D, P) / sumP
     @assert isfinite(H) "Degenerated H"
     scale!(P, 1/sumP)
     return H
@@ -68,7 +68,7 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
             @inbounds Di[j] -= minD
         end
 
-        H = Hbeta!(Pcol, Di, minD, betai)
+        H = Hbeta!(Pcol, Di, betai)
         Hdiff = H - logU
 
         # Evaluate whether the perplexity is within tolerance
@@ -84,7 +84,7 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
             end
 
             # Recompute the values
-            H = Hbeta!(Pcol, Di, minD, betai)
+            H = Hbeta!(Pcol, Di, betai)
             Hdiff = H - logU
             tries += 1
         end
