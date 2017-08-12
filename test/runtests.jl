@@ -1,4 +1,6 @@
-using RDatasets, TSne, MNIST
+using TSne
+using RDatasets
+using MNIST
 using Base.Test
 
 my_tests = [
