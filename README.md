@@ -6,8 +6,6 @@ t-SNE (t-Stochastic Neighbor Embedding)
 
 Julia implementation of L.J.P. van der Maaten and G.E. Hintons [t-SNE visualisation technique](https://lvdmaaten.github.io/tsne/).
 
-Please observe that it is not yet extensively tested.
-
 The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` Julia packages.
 
 ## Installation
