@@ -1,7 +1,7 @@
 @testset "tsne()" begin
     @testset "API tests" begin
         iris = dataset("datasets", "iris")
-        X = convert(Matrix, iris[:, 1:4])
+        X = convert(Matrix{Float64}, iris[:, 1:4])
         Y = tsne(X, 2, -1, 10, 15, verbose=true)
         @test size(Y) == (150, 2)
         Y = tsne(X, 3, -1, 10, 15, verbose=false)
@@ -14,7 +14,7 @@
 
     @testset "Iris dataset" begin
         iris = dataset("datasets", "iris")
-        X = convert(Matrix, iris[:, 1:4])
+        X = convert(Matrix{Float64}, iris[:, 1:4])
         # embed in 3D
         Y3d = tsne(X, 3, -1, 100, 15, progress=false)
         @test size(Y3d) == (150, 3)
