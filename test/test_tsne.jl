@@ -28,6 +28,11 @@
                      3, -1, 10, 15, distance=cityblock, verbose=false)
             @test size(Y) == (150, 3)
         end
+
+        @testset "distance isa Distances.Metric" begin
+            Y = tsne(X, 3, -1, 10, 15, distance=Minkowski(0.5), verbose=false)
+            @test size(Y) == (150, 3)
+        end
     end
 
     @testset "Iris dataset" begin

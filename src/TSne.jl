@@ -2,7 +2,7 @@ __precompile__()
 
 module TSne
 
-using ProgressMeter
+using Distances, ProgressMeter
 
 export tsne
 
@@ -114,18 +114,17 @@ kldivel(p, q) = (@fastmath t = ifelse(p > zero(p) && q > zero(q), p*log(p/q), ze
 
 # pairwise squared distance
 # if X is the matrix of objects, then the distance between its rows
-function pairwisesqdist(X::AbstractMatrix, dist::Bool)
-    dist && return X.^2 # X is distance matrix
-    (n, d) = size(X)
-    sum_XX = sum(abs2, X, 2)
-    -2 * (X*X') .+ sum_XX .+ sum_XX' # squared euclidean distance between the rows
-end
+pairwisesqdist(X::AbstractMatrix, dist::Bool) =
+    dist ? X.^2 : pairwise(SqEuclidean(), X')
 
 pairwisesqdist(X::AbstractVector, dist::Function) =
     [dist(x, y)^2 for x in X, y in X] # note: some redundant calc since dist should be symmetric
 
 pairwisesqdist(X::AbstractMatrix, dist::Function) =
     [dist(view(X, i, :), view(X, j, :))^2 for i in 1:size(X, 1), j in 1:size(X, 1)] # note: some redundant calc since dist should be symmetric
+
+pairwisesqdist(X::AbstractMatrix, dist::SemiMetric) =
+    pairwise(dist, X').^2 # use Distances
 
 """
     tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer=2, reduce_dims::Integer=0,
@@ -139,7 +138,7 @@ the default is not to use PCA for initialization.
 
 ### Arguments
 * `distance` if `true`, specifies that `X` is a distance matrix,
-  if of type `Function`, specifies the function to
+  if of type `Function` or `Distances.SemiMetric`, specifies the function to
   use for calculating the distances between the rows
   (or elements, if `X` is a vector) of `X`
 * `reduce_dims` the number of the first dimensions of `X` PCA to use for t-SNE,
@@ -158,7 +157,7 @@ See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
 function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, reduce_dims::Integer = 0,
               max_iter::Integer = 1000, perplexity::Number = 30.0;
-              distance::Union{Bool, Function} = false,
+              distance::Union{Bool, Function, SemiMetric} = false,
               min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
