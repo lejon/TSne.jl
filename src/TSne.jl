@@ -23,14 +23,14 @@ function Hbeta!(P::AbstractVector, D::AbstractVector, beta::Number)
 end
 
 """
-    perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+    perplexities(X::AbstractMatrix, tol::Number = 1e-5, perplexity::Number = 30.0;
                  [keyword arguments])
 
 Convert `n×d` matrix `X` of point coordinates into `n×n` perplexities matrix `P`.
 Performs a binary search to get P-values in such a way that each conditional
 Gaussian has the same perplexity.
 """
-function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+function perplexities(X::AbstractMatrix, tol::Number = 1e-5, perplexity::Number = 30.0;
                       max_iter::Integer = 50,
                       verbose::Bool=false, progress::Bool=true)
     verbose && info("Computing pairwise distances...")
@@ -99,7 +99,8 @@ Run PCA on `X` to reduce the number of its dimensions to `ndims`.
 
 FIXME use PCA routine from JuliaStats?
 """
-function pca{T}(X::Matrix{T}, ndims::Integer = 50)
+function pca(X::AbstractMatrix, ndims::Integer = 50)
+    T = eltype(X)
     (n, d) = size(X)
     X = X - repmat(mean(X, 1), n, 1)
     C = (X' * X) ./ (size(X,1)-1)
@@ -138,7 +139,7 @@ the default is not to use PCA for initialization.
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
-function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
+function tsne(X::AbstractMatrix, ndims::Integer = 2, reduce_dims::Integer = 0,
               max_iter::Integer = 1000, perplexity::Number = 30.0;
               min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
