@@ -167,9 +167,9 @@ function tsne(X::AbstractMatrix, ndims::Integer = 2, reduce_dims::Integer = 0,
         end
     end
 
-    dY = zeros(T, n, ndims)
-    iY = zeros(T, n, ndims)
-    gains = ones(T, n, ndims)
+    dY = zeros(Y)
+    iY = zeros(Y)
+    gains = ones(Y)
 
     # Compute P-values
     P = perplexities(X, 1e-5, perplexity, verbose=verbose, progress=progress)::Matrix{T}
@@ -177,10 +177,10 @@ function tsne(X::AbstractMatrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
     sum_P = cheat_scale
-    L = zeros(P)
-    Ymean = zeros(T, 1, ndims)
-    sum_YY = zeros(T, n, 1)
-    Lcolsums = zeros(T, n, 1)
+    L = zero(P)
+    Ymean = similar(Y, 1, ndims)
+    sum_YY = similar(Y, n, 1)
+    Lcolsums = similar(Y, n, 1)
     last_kldiv = NaN
 
     # Run iterations
@@ -203,13 +203,13 @@ function tsne(X::AbstractMatrix, ndims::Integer = 2, reduce_dims::Integer = 0,
 
         # Compute the gradient
         inv_sumQ = 1/sum_Q
-        fill!(Lcolsums, zero(T)) # column sums
+        fill!(Lcolsums, 0.0) # column sums
         # fill the upper triangle of L and P
         @inbounds for j in 1:size(L, 2)
             Lj = view(L, :, j)
             Pj = view(P, :, j)
             Qj = view(Q, :, j)
-            Lsumj = zero(T)
+            Lsumj = 0.0
             @simd for i in 1:j
                 Lj[i] = l = (Pj[i] - Qj[i]*inv_sumQ) * Qj[i]
                 Lcolsums[i] += l
@@ -221,7 +221,7 @@ function tsne(X::AbstractMatrix, ndims::Integer = 2, reduce_dims::Integer = 0,
             L[i, i] -= ldiag
         end
         # dY = -4LY
-        BLAS.symm!('L', 'U', -4.0, L, Y, zero(T), dY)
+        BLAS.symm!('L', 'U', -4.0, L, Y, 0.0, dY)
 
         # Perform the update
         momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
