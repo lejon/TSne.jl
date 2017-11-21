@@ -17,11 +17,7 @@ The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` J
 ```jl
 using TSne, MNIST
 
-function rescale(A, dim::Integer=1)
-    res = A .- mean(A, dim)
-    res ./= map!(x -> x > 0.0 ? x : 1.0, std(A, dim))
-    res
-end
+rescale(A, dim::Integer=1) = (A .- mean(A, dim)) ./ max.(std(A, dim), eps())
 
 data, labels = traindata()
 data = convert(Matrix{Float64}, data[:, 1:2500])'
@@ -31,8 +27,7 @@ X = rescale(data, 1)
 Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly
-labels = map(string, labels[1:2500])
-theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
+theplot = plot(x=Y[:,1], y=Y[:,2], color=string.(labels[1:size(Y,1)]))
 draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
 ```
 
