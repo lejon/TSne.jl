@@ -191,7 +191,7 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
     for iter in 1:max_iter
         # Compute pairwise affinities
         sum!(abs2, sum_YY, Y)
-        BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY^T, updates only the upper tri of Q
+        BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY', updates only the upper tri of Q
         @inbounds for j in 1:size(Q, 2)
             sum_YYj_p1 = 1.0 + sum_YY[j]
             Qj = view(Q, :, j)
