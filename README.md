@@ -10,7 +10,7 @@ The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` J
 
 ## Installation
 
-  `julia> Pkg.clone("git://github.com/lejon/TSne.jl.git")`
+  `julia> Pkg.add("TSne")`
 
 ## Basic API usage
 
