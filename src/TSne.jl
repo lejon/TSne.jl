@@ -100,15 +100,12 @@ Run PCA on `X` to reduce the number of its dimensions to `ndims`.
 FIXME use PCA routine from JuliaStats?
 """
 function pca(X::AbstractMatrix, ndims::Integer = 50)
-    T = eltype(X)
     (n, d) = size(X)
-    X = X - repmat(mean(X, 1), n, 1)
-    C = (X' * X) ./ (size(X,1)-1)
-    l, M = eig(C)
-    sorder = sortperm(l, rev=true)
-    M = M[:, sorder]::Matrix{T}
-    Y = X * M[:, 1:min(d, ndims)]
-    return Y
+    (d <= ndims) && return X
+    X = X .- mean(X, 1)
+    C = Symmetric((X' * X) ./ (n-1))
+    Ceig = eigfact(C, 1:ndims)
+    return X * Ceig.vectors
 end
 
 # K-L divergence element
