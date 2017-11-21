@@ -4,14 +4,6 @@ module TSne
 
 using ProgressMeter
 
-# Numpy Math.sum => axis = 0 => sum down the columns. axis = 1 => sum along the rows
-# Julia Base.sum => axis = 1 => sum down the columns. axis = 2 => sum along the rows
-
-#
-#  tsne.jl
-#
-#  This is a straight off Julia port of Laurens van der Maatens python implementation of tsne
-
 export tsne
 
 """
