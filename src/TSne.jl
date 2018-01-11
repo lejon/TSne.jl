@@ -38,13 +38,12 @@ Convert `n×d` matrix `X` of point coordinates into `n×n` perplexities matrix `
 Performs a binary search to get P-values in such a way that each conditional
 Gaussian has the same perplexity.
 """
-function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+function perplexities(D::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
                       max_iter::Integer = 50,
                       verbose::Bool=false, progress::Bool=true)
-    verbose && info("Computing pairwise distances...")
-    (n, d) = size(X)
-    sum_XX = sum(abs2, X, 2)
-    D = -2 * (X*X') .+ sum_XX .+ sum_XX' # euclidean distances between the points
+    size(D, 1) == size(D, 2) || throw(ArgumentError("`D` must be square"))
+    n = size(D, 1)
+
     P = zeros(Float64, n, n) # perplexities matrix
     beta = ones(Float64, n)  # vector of Normal distribution precisions for each point
     logU = log(perplexity) # the log of expected perplexity
@@ -100,6 +99,12 @@ function perplexities(X::Matrix, tol::Number = 1e-5, perplexity::Number = 30.0;
     return P
 end
 
+function pairwisedists(X::Matrix; verbose::Bool=true)
+    verbose && info("Computing Euclidean pairwise distances...")
+    sum_XX = sum(abs2, X, 2)
+    D = -2 * (X*X') .+ sum_XX .+ sum_XX' # euclidean distances between the points
+end
+
 """
     pca(X::Matrix, ncols::Integer = 50)
 
@@ -146,43 +151,20 @@ the default is not to use PCA for initialization.
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
-function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
-              max_iter::Integer = 1000, perplexity::Number = 30.0;
-              min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
+function tsne(Y::Matrix, dists::Matrix; ndims::Integer = 2,
+              max_iter::Integer = 1000, perplexity::Number = 30.0,
+              min_gain::Number = 0.01, eta::Number = 200.0,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true)
-    verbose && info("Initial X Shape is $(size(X))")
-    ndims < size(X, 2) || throw(DimensionMismatch("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
-
-    # Initialize variables
-    T = eltype(X)
-    X = X * (one(T)/(std(X)::T)) # note that X is copied
-    if 0<reduce_dims<size(X, 2)
-        reduce_dims = max(reduce_dims, ndims)
-        verbose && info("Preprocessing the data using PCA...")
-        X = pca(X, reduce_dims)
-    end
-    (n, d) = size(X)
-    if !pca_init
-        verbose && info("Starting with random layout...")
-        Y = randn(n, ndims)
-    else
-        verbose && info("Using the first $ndims components of the data PCA as the initial layout...")
-        if reduce_dims >= ndims
-            Y = X[:, 1:ndims] # reuse X PCA
-        else
-            @assert reduce_dims <= 0 # no X PCA
-            Y = pca(X, ndims)
-        end
-    end
-
+    T = eltype(Y)
+    n = size(dists, 1)
     dY = zeros(T, n, ndims)
     iY = zeros(T, n, ndims)
     gains = ones(T, n, ndims)
 
     # Compute P-values
-    P = perplexities(X, 1e-5, perplexity, verbose=verbose, progress=progress)::Matrix{T}
+    P = perplexities(dists, 1e-5, perplexity, verbose=verbose, progress=progress)::Matrix{T}
     P = P + P' # make P symmetric
     scale!(P, 1.0/sum(P))
     scale!(P, cheat_scale)  # early exaggeration
@@ -279,6 +261,50 @@ function tsne(X::Matrix, ndims::Integer = 2, reduce_dims::Integer = 0,
 
     # Return solution
     return Y
+end
+
+function computeY(X::Matrix, pca_init::Bool, ndims::Integer, verbose::Bool=true)
+    (n, d) = size(X)
+    if !pca_init
+        verbose && info("Starting with random layout...")
+        Y = randn(n, ndims)
+    else
+        verbose && info("Using the first $ndims components of the data PCA as the initial layout...")
+        if reduce_dims >= ndims
+            Y = X[:, 1:ndims] # reuse X PCA
+        else
+            @assert reduce_dims <= 0 # no X PCA
+            Y = pca(X, ndims)
+        end
+    end
+    Y
+end
+
+"Tsne where `X` is a matrix of values and distance is Euclidean"
+function tsne(X::Matrix; ndims::Integer=2, reduce_dims::Integer = 0, verbose::Bool=true,
+              pca_init::Bool=false, kwargs...)
+    # Initialize variables
+    verbose && info("Initial X Shape is $(size(X))")
+    ndims < size(X, 2) || throw(DimensionMismatch("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
+    T = eltype(X)
+    X = X * (one(T)/(std(X)::T)) # note that X is copied
+    if 0<reduce_dims<size(X, 2)
+        reduce_dims = max(reduce_dims, ndims)
+        verbose && info("Preprocessing the data using PCA...")
+        X = pca(X, reduce_dims)
+    end
+
+    # @assert false
+    Y = computeY(X, pca_init,ndims, verbose)
+    tsne(Y, pairwisedists(X); ndims=ndims, verbose=verbose, kwargs...)
+end
+
+"Tsne given a vector of arbitrary objects `X` and measure δ: a::T, b::T -> Real"
+function tsne{T}(X::Vector{T}, δ::Function; ndims::Integer=2,
+                 verbose::Bool=true, kwargs...)
+    distances = [δ(x, y) for x in X, y in X]
+    Y = randn(size(X, 1), ndims)
+    tsne(Y, distances; ndims=ndims, verbose=verbose, kwargs...)
 end
 
 end
