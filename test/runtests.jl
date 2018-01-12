@@ -1,6 +1,7 @@
 using TSne
 using RDatasets
 using MNIST
+using Distances
 using Base.Test
 
 my_tests = [
