@@ -105,8 +105,8 @@ function pca(X::AbstractMatrix, ndims::Integer = 50)
     (d <= ndims) && return X
     X = X .- mean(X, 1)
     C = Symmetric((X' * X) ./ (n-1))
-    Ceig = eigfact(C, 1:ndims)
-    return X * Ceig.vectors
+    Ceig = eigfact(C, (d-ndims+1):d) # take eigvects for top ndims largest eigvals
+    return X * flipdim(Ceig.vectors, 2)
 end
 
 # K-L divergence element
