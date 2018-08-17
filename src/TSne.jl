@@ -227,7 +227,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         sum_Q *= 2 # the diagonal and lower-tri part of Q is zero
 
         # Compute the gradient
-        inv_sumQ = 1/sum_Q
+        inv_sum_Q = 1.0 / sum_Q
         fill!(Lcolsums, 0.0) # column sums
         # fill the upper triangle of L (gradient)
         @inbounds for j in 1:size(L, 2)
@@ -235,15 +235,15 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             Pj = view(P, :, j)
             Qj = view(Q, :, j)
             Lsumj = 0.0
-            for i in 1:j
-                Lj[i] = l = (Pj[i] - Qj[i]*inv_sumQ) * Qj[i]
+            for i in 1:(j-1)
+                @fastmath Lj[i] = l = (Pj[i] - Qj[i]*inv_sum_Q) * Qj[i]
                 Lcolsums[i] += l
                 Lsumj += l
             end
-            Lcolsums[j] += Lsumj - Lj[j]
+            Lcolsums[j] += Lsumj
         end
         @inbounds for (i, ldiag) in enumerate(Lcolsums)
-            L[i, i] -= ldiag
+            L[i, i] = -ldiag
         end
         # dY = -4LY
         BLAS.symm!('L', 'U', -4.0, L, Y, 0.0, dY)
