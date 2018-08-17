@@ -6,7 +6,7 @@ using Printf: @sprintf
 export tsne
 
 """
-Compute the point perplexities `P` given its distances to the other points `D`
+Compute the point perplexities `P` given its squared distances to the other points `D`
 and the precision of Gaussian distribution `beta`.
 """
 function Hbeta!(P::AbstractVector, D::AbstractVector, beta::Number)
@@ -37,7 +37,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     n = size(D, 1)
     P = fill(zero(T), n, n) # perplexities matrix
     beta = fill(one(T), n)  # vector of Normal distribution precisions for each point
-    logU = log(perplexity) # the log of expected perplexity
+    Htarget = log(perplexity) # the expected entropy
     Di = fill(zero(T), n)
     Pcol = fill(zero(T), n)
 
@@ -54,10 +54,10 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
         copyto!(Di, view(D, :, i))
         Di[i] = prevfloat(Inf) # exclude D[i,i] from minimum(), yet make it finite and exp(-D[i,i])==0.0
         minD = minimum(Di) # distance of i-th point to its closest neighbour
-        @inbounds Di .-= minD
+        @inbounds Di .-= minD # entropy is invariant to offsetting Di, which helps to avoid overflow
 
         H = Hbeta!(Pcol, Di, betai)
-        Hdiff = H - logU
+        Hdiff = H - Htarget
 
         # Evaluate whether the perplexity is within tolerance
         tries = 0
@@ -73,7 +73,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
 
             # Recompute the values
             H = Hbeta!(Pcol, Di, betai)
-            Hdiff = H - logU
+            Hdiff = H - Htarget
             tries += 1
         end
         verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
@@ -186,9 +186,9 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         Y = randn(n, ndims)
     end
 
-    dY = fill!(similar(Y), 0)
-    iY = fill!(similar(Y), 0)
-    gains = fill!(similar(Y), 1)
+    dY = fill!(similar(Y), 0)     # gradient vector
+    iY = fill!(similar(Y), 0)     # momentum vector
+    gains = fill!(similar(Y), 1)  # how much momentum is affected by gradient
 
     # Compute P-values
     verbose && (distance !== true) && @info("Computing pairwise distances...")
@@ -198,15 +198,15 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     P .+= P' # make P symmetric
     P .*= cheat_scale/sum(P) # normalize + early exaggeration
     sum_P = cheat_scale
-    L = fill!(similar(P), 0)
-    Ymean = similar(Y, 1, ndims)
-    sum_YY = similar(Y, n, 1)
-    Lcolsums = similar(Y, n, 1)
-    last_kldiv = NaN
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
-    Q = fill!(similar(P), 0)
+    Q = fill!(similar(P), 0)     # temp upper-tri matrix with 1/(1 + (Y[i]-Y[j])²)
+    Ymean = similar(Y, 1, ndims) # average for each embedded dimension
+    sum_YY = similar(Y, n, 1)    # square norms of embedded points
+    L = fill!(similar(P), 0)     # temp upper-tri matrix for KLdiv gradient calculation
+    Lcolsums = similar(L, n, 1)  # sum(Symmetric(L), 2)
+    last_kldiv = NaN
     for iter in 1:max_iter
         # Compute pairwise affinities
         sum!(abs2, sum_YY, Y)
@@ -216,8 +216,8 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             Qj = view(Q, :, j)
             Qj[j] = 0.0
             for i in 1:(j-1)
-                denom = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
-                @fastmath Qj[i] = ifelse(denom > 1.0, 1.0 / denom, 1.0)
+                sqdist_p1 = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
+                @fastmath Qj[i] = ifelse(sqdist_p1 > 1.0, 1.0 / sqdist_p1, 1.0)
             end
         end
         sum_Q = 2*sum(Q) # the diagonal and lower-tri part of Q is zero
@@ -225,7 +225,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         # Compute the gradient
         inv_sumQ = 1/sum_Q
         fill!(Lcolsums, 0.0) # column sums
-        # fill the upper triangle of L and P
+        # fill the upper triangle of L (gradient)
         @inbounds for j in 1:size(L, 2)
             Lj = view(L, :, j)
             Pj = view(P, :, j)
