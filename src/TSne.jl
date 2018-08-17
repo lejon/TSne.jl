@@ -281,10 +281,12 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             end
             last_kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
         end
-        progress && update!(pb, iter, showvalues = Dict(:KL_divergence => last_kldiv))
+        progress && update!(pb, iter,
+                            showvalues = Dict(:KL_divergence => @sprintf("%.4f%s", last_kldiv,
+                                                                         iter <= stop_cheat_iter ? " (warmup)" : "")))
     end
     progress && (finish!(pb))
-    verbose && @info("Final t-SNE KL-divergence=$last_kldiv")
+    verbose && @info(@sprintf("Final t-SNE KL-divergence=%.4f", last_kldiv))
 
     # Return solution
     return Y
