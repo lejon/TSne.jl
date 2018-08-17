@@ -260,8 +260,14 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         end
         @inbounds Y .-= mean!(Ymean, Y)
 
-        # Compute current value of cost function
-        if progress && (!isfinite(last_kldiv) || iter == max_iter || mod(iter, max(max_iter÷20, 10)) == 0)
+        # stop cheating with P-values
+        if sum_P != 1.0 && iter >= min(max_iter, stop_cheat_iter)
+            P .*= 1/sum_P
+            sum_P = 1.0
+        end
+        # Compute the current value of cost function
+        if !isfinite(last_kldiv) || iter == max_iter ||
+            (progress && mod(iter, max(max_iter÷20, 10)) == 0)
             local kldiv = 0.0
             @inbounds for j in 1:size(P, 2)
                 Pj = view(P, :, j)
@@ -276,11 +282,6 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             last_kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
         end
         progress && update!(pb, iter, showvalues = Dict(:KL_divergence => last_kldiv))
-        # stop cheating with P-values
-        if sum_P != 1.0 && iter >= min(max_iter, stop_cheat_iter)
-            P .*= 1/sum_P
-            sum_P = 1.0
-        end
     end
     progress && (finish!(pb))
     verbose && @info("Final t-SNE KL-divergence=$last_kldiv")
