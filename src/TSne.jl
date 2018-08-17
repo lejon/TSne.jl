@@ -213,6 +213,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         @inbounds for i in 1:size(Q, 2)
             sum_YY[i] = Q[i, i]
         end
+        sum_Q = 0.0
         @inbounds for j in 1:size(Q, 2)
             sum_YYj_p1 = 1.0 + sum_YY[j]
             Qj = view(Q, :, j)
@@ -220,9 +221,10 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             for i in 1:(j-1)
                 sqdist_p1 = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
                 @fastmath Qj[i] = ifelse(sqdist_p1 > 1.0, 1.0 / sqdist_p1, 1.0)
+                sum_Q += Qj[i]
             end
         end
-        sum_Q = 2*sum(Q) # the diagonal and lower-tri part of Q is zero
+        sum_Q *= 2 # the diagonal and lower-tri part of Q is zero
 
         # Compute the gradient
         inv_sumQ = 1/sum_Q
