@@ -10,6 +10,11 @@
         tsne(X, 2, -1, 10, 15, verbose=false, progress=false)
         Y = tsne(X, 2, -1, 10, 15, pca_init=true, cheat_scale=1.0, progress=false)
         @test size(Y) == (150, 2)
+        Y, beta, kldiv = tsne(X, 2, -1, 10, 15, pca_init=true, cheat_scale=1.0, progress=false, extended_output=true)
+        @test size(Y) == (150, 2)
+        @test beta isa AbstractVector
+        @test length(beta) == 150
+        @test isfinite(kldiv)
 
         @testset "distance = true" begin
             @test_throws ArgumentError tsne(X, 3, -1, 10, 15, distance=true, verbose=false)

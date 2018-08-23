@@ -85,7 +85,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     progress && finish!(pb)
     # Return final P-matrix
     verbose && @info(@sprintf("Mean σ=%.4f", mean(sqrt.(1 ./ beta))))
-    return P
+    return P, beta
 end
 
 """
@@ -128,6 +128,8 @@ pairwisesqdist(X::AbstractMatrix, dist::SemiMetric) =
 Apply t-SNE (t-Distributed Stochastic Neighbor Embedding) to `X`,
 i.e. embed its points (rows) into `ndims` dimensions preserving close neighbours.
 
+Returns the points×`ndims` matrix of calculated embedded coordinates.
+
 Different from the orginal implementation,
 the default is not to use PCA for initialization.
 
@@ -147,6 +149,8 @@ the default is not to use PCA for initialization.
 * `progress` display progress meter during t-SNE optimization
 * `min_gain`, `eta`, `initial_momentum`, `final_momentum`, `momentum_switch_iter`,
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
+* `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
+  point perplexities and final Kullback-Leibler divergence
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
@@ -156,7 +160,8 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
               min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
-              verbose::Bool = false, progress::Bool=true)
+              verbose::Bool = false, progress::Bool=true,
+              extended_output = false)
     # preprocess X
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
@@ -193,8 +198,8 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     # Compute P-values
     verbose && (distance !== true) && @info("Computing pairwise distances...")
     D = pairwisesqdist(X, distance)
-    P = perplexities(D, 1e-5, perplexity,
-                     verbose=verbose, progress=progress)
+    P, beta = perplexities(D, 1e-5, perplexity,
+                           verbose=verbose, progress=progress)
     P .+= P' # make P symmetric
     P .*= cheat_scale/sum(P) # normalize + early exaggeration
     sum_P = cheat_scale
@@ -289,7 +294,11 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     verbose && @info(@sprintf("Final t-SNE KL-divergence=%.4f", last_kldiv))
 
     # Return solution
-    return Y
+    if !extended_output
+        return Y
+    else
+        return Y, beta, last_kldiv
+    end
 end
 
 end
