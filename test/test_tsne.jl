@@ -49,9 +49,8 @@
     @testset "MNIST.traindata() dataset" begin
         train_data, labels = MNIST.traindata()
         X = train_data[:, 1:2500]'
-        Xcenter = X - mean(X)
-        Xstd = std(X)
-        X = Xcenter / Xstd
+        X .-= mean(X, dims=1)
+        X ./= std(X, dims=1)
         Y = tsne(X, 2, 50, 30, 20, progress=true)
         @test size(Y) == (2500, 2)
     end

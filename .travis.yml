@@ -3,13 +3,14 @@ os:
     - osx
     - linux
 julia:
-    - 0.6
+    - 0.7
+    - 1.0
     - nightly
 notifications:
   email: false
-
-script:
-    - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("TSne", coverage=true)'
-
+# uncomment the following lines to override the default test script
+#script:
+#    - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+#    - julia --check-bounds=yes -e 'using Pkg; Pkg.add(pwd()); Pkg.build("TSne"); Pkg.test("TSne"; coverage=true)'
 after_success:
-    - julia -e 'cd(Pkg.dir("TSne")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
+    - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())';

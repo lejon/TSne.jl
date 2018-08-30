@@ -15,16 +15,16 @@ The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` J
 ## Basic API usage
 
 ```jl
-using TSne, MNIST
+using TSne, Statistics, MNIST
 
-rescale(A, dim::Integer=1) = (A .- mean(A, dim)) ./ max.(std(A, dim), eps())
+rescale(A; dims=1) = (A .- mean(A, dims=dims)) ./ max.(std(A, dims=dims), eps())
 
-data, labels = traindata()
-data = convert(Matrix{Float64}, data[:, 1:2500])'
+data, labels = traindata();
+data = convert(Matrix{Float64}, data[:, 1:2500])';
 # Normalize the data, this should be done if there are large scale differences in the dataset
-X = rescale(data, 1)
+X = rescale(data, dims=1);
 
-Y = tsne(X, 2, 50, 1000, 20.0)
+Y = tsne(X, 2, 50, 1000, 20.0);
 
 using Gadfly
 theplot = plot(x=Y[:,1], y=Y[:,2], color=string.(labels[1:size(Y,1)]))
