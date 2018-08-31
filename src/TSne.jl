@@ -1,24 +1,21 @@
-__precompile__()
-
 module TSne
 
-using Distances, ProgressMeter
+using LinearAlgebra, Statistics, Distances, ProgressMeter
+using Printf: @sprintf
 
 export tsne
 
 """
-Compute the point perplexities `P` given its distances to the other points `D`
+Compute the point perplexities `P` given its squared distances to the other points `D`
 and the precision of Gaussian distribution `beta`.
 """
 function Hbeta!(P::AbstractVector, D::AbstractVector, beta::Number)
-    @simd for j in eachindex(D)
-        @inbounds P[j] = exp(-beta * D[j])
-    end
+    @inbounds P .= exp.(-beta .* D)
     sumP = sum(P)
     @assert (isfinite(sumP) && sumP > 0.0) "Degenerated P: sum=$sumP, beta=$beta"
     H = log(sumP) + beta * dot(D, P) / sumP
     @assert isfinite(H) "Degenerated H"
-    scale!(P, 1/sumP)
+    @inbounds P .*= 1/sumP
     return H
 end
 
@@ -30,19 +27,19 @@ Convert `n×n` squared distances matrix `D` into `n×n` perplexities matrix `P`.
 Performs a binary search to get P-values in such a way that each conditional
 Gaussian has the same perplexity.
 """
-function perplexities(D::AbstractMatrix, tol::Number = 1e-5, perplexity::Number = 30.0;
+function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Number = 30.0;
                       max_iter::Integer = 50,
-                      verbose::Bool=false, progress::Bool=true)
-    ((eltype(D) <: Number) && issymmetric(D) && all(x -> x >= 0, D)) ||
+                      verbose::Bool=false, progress::Bool=true) where T<:Number
+    (issymmetric(D) && all(x -> x >= 0, D)) ||
         throw(ArgumentError("Distance matrix D must be symmetric and positive"))
 
     # initialize
     n = size(D, 1)
-    P = zeros(Float64, n, n) # perplexities matrix
-    beta = ones(Float64, n)  # vector of Normal distribution precisions for each point
-    logU = log(perplexity) # the log of expected perplexity
-    Di = zeros(Float64, n)
-    Pcol = zeros(Float64, n)
+    P = fill(zero(T), n, n) # perplexities matrix
+    beta = fill(one(T), n)  # vector of Normal distribution precisions for each point
+    Htarget = log(perplexity) # the expected entropy
+    Di = fill(zero(T), n)
+    Pcol = fill(zero(T), n)
 
     # Loop over all datapoints
     progress && (pb = Progress(n, "Computing point perplexities"))
@@ -54,15 +51,13 @@ function perplexities(D::AbstractMatrix, tol::Number = 1e-5, perplexity::Number 
         betamin = 0.0
         betamax = Inf
 
-        copy!(Di, view(D, :, i))
+        copyto!(Di, view(D, :, i))
         Di[i] = prevfloat(Inf) # exclude D[i,i] from minimum(), yet make it finite and exp(-D[i,i])==0.0
         minD = minimum(Di) # distance of i-th point to its closest neighbour
-        @simd for j in eachindex(Di)
-            @inbounds Di[j] -= minD
-        end
+        @inbounds Di .-= minD # entropy is invariant to offsetting Di, which helps to avoid overflow
 
         H = Hbeta!(Pcol, Di, betai)
-        Hdiff = H - logU
+        Hdiff = H - Htarget
 
         # Evaluate whether the perplexity is within tolerance
         tries = 0
@@ -78,19 +73,19 @@ function perplexities(D::AbstractMatrix, tol::Number = 1e-5, perplexity::Number 
 
             # Recompute the values
             H = Hbeta!(Pcol, Di, betai)
-            Hdiff = H - logU
+            Hdiff = H - Htarget
             tries += 1
         end
         verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final column of P
         @assert Pcol[i] == 0.0 "Diagonal probability P[$i,$i]=$(Pcol[i]) not zero"
-        P[:, i] = Pcol
+        @inbounds P[:, i] .= Pcol
         beta[i] = betai
     end
     progress && finish!(pb)
     # Return final P-matrix
-    verbose && info("Mean σ=$(mean(sqrt.(1 ./ beta)))")
-    return P
+    verbose && @info(@sprintf("Mean σ=%.4f", mean(sqrt.(1 ./ beta))))
+    return P, beta
 end
 
 """
@@ -103,14 +98,14 @@ FIXME use PCA routine from JuliaStats?
 function pca(X::AbstractMatrix, ndims::Integer = 50)
     (n, d) = size(X)
     (d <= ndims) && return X
-    X = X .- mean(X, 1)
-    C = Symmetric((X' * X) ./ (n-1))
-    Ceig = eigfact(C, (d-ndims+1):d) # take eigvects for top ndims largest eigvals
-    return X * flipdim(Ceig.vectors, 2)
+    Y = X .- mean(X, dims=1)
+    C = Symmetric((Y' * Y) ./ (n-1))
+    Ceig = eigen(C, (d-ndims+1):d) # take eigvects for top ndims largest eigvals
+    return Y * reverse(Ceig.vectors, dims=2)
 end
 
 # K-L divergence element
-kldivel(p, q) = (@fastmath t = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p)); t)
+kldivel(p, q) = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p))
 
 # pairwise squared distance
 # if X is the matrix of objects, then the distance between its rows
@@ -133,6 +128,8 @@ pairwisesqdist(X::AbstractMatrix, dist::SemiMetric) =
 Apply t-SNE (t-Distributed Stochastic Neighbor Embedding) to `X`,
 i.e. embed its points (rows) into `ndims` dimensions preserving close neighbours.
 
+Returns the points×`ndims` matrix of calculated embedded coordinates.
+
 Different from the orginal implementation,
 the default is not to use PCA for initialization.
 
@@ -152,6 +149,8 @@ the default is not to use PCA for initialization.
 * `progress` display progress meter during t-SNE optimization
 * `min_gain`, `eta`, `initial_momentum`, `final_momentum`, `momentum_switch_iter`,
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
+* `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
+  point perplexities and final Kullback-Leibler divergence
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
@@ -161,25 +160,26 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
               min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
-              verbose::Bool = false, progress::Bool=true)
+              verbose::Bool = false, progress::Bool=true,
+              extended_output = false)
     # preprocess X
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
-        verbose && info("Initial X shape is $(size(X))")
+        verbose && @info("Initial X shape is $(size(X))")
         ndims < size(X, 2) || throw(DimensionMismatch("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
 
         ini_Y_with_X = true
         X = X * (1.0/std(X)::eltype(X)) # note that X is copied
         if 0<reduce_dims<size(X, 2)
             reduce_dims = max(reduce_dims, ndims)
-            verbose && info("Preprocessing the data using PCA...")
+            verbose && @info("Preprocessing the data using PCA...")
             X = pca(X, reduce_dims)
         end
     end
     n = size(X, 1)
     # Initialize embedding
     if pca_init && ini_Y_with_X
-        verbose && info("Using the first $ndims components of the data PCA as the initial layout...")
+        verbose && @info("Using the first $ndims components of the data PCA as the initial layout...")
         if reduce_dims >= ndims
             Y = X[:, 1:ndims] # reuse X PCA
         else
@@ -187,72 +187,75 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             Y = pca(X, ndims)
         end
     else
-        verbose && info("Starting with random layout...")
+        verbose && @info("Starting with random layout...")
         Y = randn(n, ndims)
     end
 
-    dY = zeros(Y)
-    iY = zeros(Y)
-    gains = ones(Y)
+    dY = fill!(similar(Y), 0)     # gradient vector
+    iY = fill!(similar(Y), 0)     # momentum vector
+    gains = fill!(similar(Y), 1)  # how much momentum is affected by gradient
 
     # Compute P-values
-    verbose && (distance !== true) && info("Computing pairwise distances...")
+    verbose && (distance !== true) && @info("Computing pairwise distances...")
     D = pairwisesqdist(X, distance)
-    P = perplexities(D, 1e-5, perplexity,
-                     verbose=verbose, progress=progress)
-    P = P + P' # make P symmetric
-    scale!(P, 1.0/sum(P))
-    scale!(P, cheat_scale)  # early exaggeration
+    P, beta = perplexities(D, 1e-5, perplexity,
+                           verbose=verbose, progress=progress)
+    P .+= P' # make P symmetric
+    P .*= cheat_scale/sum(P) # normalize + early exaggeration
     sum_P = cheat_scale
-    L = zero(P)
-    Ymean = similar(Y, 1, ndims)
-    sum_YY = similar(Y, n, 1)
-    Lcolsums = similar(Y, n, 1)
-    last_kldiv = NaN
 
     # Run iterations
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
-    Q = zeros(P)
+    Q = fill!(similar(P), 0)     # temp upper-tri matrix with 1/(1 + (Y[i]-Y[j])²)
+    Ymean = similar(Y, 1, ndims) # average for each embedded dimension
+    sum_YY = similar(Y, n, 1)    # square norms of embedded points
+    L = fill!(similar(P), 0)     # temp upper-tri matrix for KLdiv gradient calculation
+    Lcolsums = similar(L, n, 1)  # sum(Symmetric(L), 2)
+    last_kldiv = NaN
     for iter in 1:max_iter
         # Compute pairwise affinities
-        sum!(abs2, sum_YY, Y)
         BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY', updates only the upper tri of Q
+        @inbounds for i in 1:size(Q, 2)
+            sum_YY[i] = Q[i, i]
+        end
+        sum_Q = 0.0
         @inbounds for j in 1:size(Q, 2)
             sum_YYj_p1 = 1.0 + sum_YY[j]
             Qj = view(Q, :, j)
             Qj[j] = 0.0
-            @simd for i in 1:(j-1)
-                denom = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
-                @fastmath Qj[i] = ifelse(denom > 1.0, 1.0 / denom, 1.0)
+            for i in 1:(j-1)
+                sqdist_p1 = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
+                @fastmath Qj[i] = ifelse(sqdist_p1 > 1.0, 1.0 / sqdist_p1, 1.0)
+                sum_Q += Qj[i]
             end
         end
-        sum_Q = 2*sum(Q) # the diagonal and lower-tri part of Q is zero
+        sum_Q *= 2 # the diagonal and lower-tri part of Q is zero
 
         # Compute the gradient
-        inv_sumQ = 1/sum_Q
+        inv_sum_Q = 1.0 / sum_Q
         fill!(Lcolsums, 0.0) # column sums
-        # fill the upper triangle of L and P
+        # fill the upper triangle of L (gradient)
         @inbounds for j in 1:size(L, 2)
             Lj = view(L, :, j)
             Pj = view(P, :, j)
             Qj = view(Q, :, j)
             Lsumj = 0.0
-            @simd for i in 1:j
-                Lj[i] = l = (Pj[i] - Qj[i]*inv_sumQ) * Qj[i]
+            for i in 1:(j-1)
+                @fastmath Lj[i] = l = (Pj[i] - Qj[i]*inv_sum_Q) * Qj[i]
                 Lcolsums[i] += l
                 Lsumj += l
             end
-            Lcolsums[j] += Lsumj - Lj[j]
+            Lcolsums[j] += Lsumj
         end
         @inbounds for (i, ldiag) in enumerate(Lcolsums)
-            L[i, i] -= ldiag
+            L[i, i] = -ldiag
         end
         # dY = -4LY
         BLAS.symm!('L', 'U', -4.0, L, Y, 0.0, dY)
 
         # Perform the update
         momentum = iter <= momentum_switch_iter ? initial_momentum : final_momentum
-        @inbounds @simd for i in eachindex(gains)
+        @inbounds for i in eachindex(gains)
             gains[i] = max(ifelse((dY[i] > 0) == (iY[i] > 0),
                                   gains[i] * 0.8,
                                   gains[i] + 0.2),
@@ -260,42 +263,42 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             iY[i] = momentum * iY[i] - eta * (gains[i] * dY[i])
             Y[i] += iY[i]
         end
-        mean!(Ymean, Y)
-        @inbounds for j in 1:size(Y, 2)
-            YcolMean = Ymean[j]
-            Yj = view(Y, :, j)
-            @simd for i in eachindex(Yj)
-                Yj[i] -= YcolMean
-            end
-        end
+        @inbounds Y .-= mean!(Ymean, Y)
 
-        # Compute current value of cost function
-        if progress && (!isfinite(last_kldiv) || iter == max_iter || mod(iter, max(max_iter÷20, 10)) == 0)
+        # stop cheating with P-values
+        if sum_P != 1.0 && iter >= min(max_iter, stop_cheat_iter)
+            P .*= 1/sum_P
+            sum_P = 1.0
+        end
+        # Compute the current value of cost function
+        if !isfinite(last_kldiv) || iter == max_iter ||
+            (progress && mod(iter, max(max_iter÷20, 10)) == 0)
             local kldiv = 0.0
             @inbounds for j in 1:size(P, 2)
                 Pj = view(P, :, j)
                 Qj = view(Q, :, j)
                 kldiv_j = 0.0
-                @simd for i in 1:(j-1)
+                for i in 1:(j-1)
                     # P and Q are symmetric (only the upper triangle used)
-                    kldiv_j += kldivel(Pj[i], Qj[i])
+                    @fastmath kldiv_j += kldivel(Pj[i], Qj[i])
                 end
                 kldiv += 2*kldiv_j + kldivel(Pj[j], Q[j])
             end
             last_kldiv = kldiv/sum_P + log(sum_Q/sum_P) # adjust wrt P and Q scales
         end
-        progress && update!(pb, iter, showvalues = Dict(:KL_divergence => last_kldiv))
-        # stop cheating with P-values
-        if iter == min(max_iter, stop_cheat_iter)
-            scale!(P, 1/sum_P)
-            sum_P = 1.0
-        end
+        progress && update!(pb, iter,
+                            showvalues = Dict(:KL_divergence => @sprintf("%.4f%s", last_kldiv,
+                                                                         iter <= stop_cheat_iter ? " (warmup)" : "")))
     end
     progress && (finish!(pb))
-    verbose && info("Final t-SNE KL-divergence=$last_kldiv")
+    verbose && @info(@sprintf("Final t-SNE KL-divergence=%.4f", last_kldiv))
 
     # Return solution
-    return Y
+    if !extended_output
+        return Y
+    else
+        return Y, beta, last_kldiv
+    end
 end
 
 end

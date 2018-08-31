@@ -10,6 +10,11 @@
         tsne(X, 2, -1, 10, 15, verbose=false, progress=false)
         Y = tsne(X, 2, -1, 10, 15, pca_init=true, cheat_scale=1.0, progress=false)
         @test size(Y) == (150, 2)
+        Y, beta, kldiv = tsne(X, 2, -1, 10, 15, pca_init=true, cheat_scale=1.0, progress=false, extended_output=true)
+        @test size(Y) == (150, 2)
+        @test beta isa AbstractVector
+        @test length(beta) == 150
+        @test isfinite(kldiv)
 
         @testset "distance = true" begin
             @test_throws ArgumentError tsne(X, 3, -1, 10, 15, distance=true, verbose=false)
@@ -47,12 +52,17 @@
     end
 
     @testset "MNIST.traindata() dataset" begin
-        train_data, labels = MNIST.traindata()
-        X = train_data[:, 1:2500]'
-        Xcenter = X - mean(X)
-        Xstd = std(X)
-        X = Xcenter / Xstd
-        Y = tsne(X, 2, 50, 30, 20, progress=true)
+        Random.seed!(345678)
+        train_data, labels = MLDatasets.with_accept(true) do
+                MNIST.traindata(Float64)
+        end
+        X_labels = labels[1:2500] .+ 1
+        X = reshape(permutedims(train_data[:, :, 1:2500], (3, 1, 2)),
+                    2500, size(train_data, 1)*size(train_data, 2))
+        X .-= mean(X, dims=1)
+        X ./= std(X, dims=1)
+
+        Y = tsne(X, 2, 50, 2000, 20, progress=true)
         @test size(Y) == (2500, 2)
     end
 end
