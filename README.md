@@ -1,8 +1,11 @@
-[![Travis](https://travis-ci.org/lejon/TSne.jl.svg?branch=master)](https://travis-ci.org/lejon/TSne.jl)
-[![Coveralls](https://coveralls.io/repos/github/lejon/TSne.jl/badge.svg?branch=master)](https://coveralls.io/github/lejon/TSne.jl?branch=master)
-
 t-SNE (t-Stochastic Neighbor Embedding)
 =======================================
+
+[![Julia 0.6 Status](http://pkg.julialang.org/badges/TSne_0.6.svg)](http://pkg.julialang.org/?pkg=TSne&ver=0.6)
+[![Julia 0.7 Status](http://pkg.julialang.org/badges/TSne_0.7.svg)](http://pkg.julialang.org/?pkg=TSne&ver=0.7)
+
+[![Build Status](https://travis-ci.org/lejon/TSne.jl.svg?branch=master)](https://travis-ci.org/lejon/TSne.jl)
+[![Coverage Status](https://coveralls.io/repos/github/lejon/TSne.jl/badge.svg?branch=master)](https://coveralls.io/github/lejon/TSne.jl?branch=master)
 
 Julia implementation of L.J.P. van der Maaten and G.E. Hintons [t-SNE visualisation technique](https://lvdmaaten.github.io/tsne/).
 
