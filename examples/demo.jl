@@ -27,9 +27,9 @@ if ARGS[1] == "iris"
     iterations = 1500
     perplexity = 15
 elseif ARGS[1] == "mnist"
-    using MNIST
+    using MLDatasets
     println("Using MNIST dataset.")
-    X, labels = traindata()
+    X, labels = MNIST.traindata(Float64);
     npts = min(2500, size(X, 2), size(labels))
     labels = labels[1:npts]
     X = rescale(X[:, 1:npts]')

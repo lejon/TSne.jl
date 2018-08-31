@@ -9,7 +9,7 @@ t-SNE (t-Stochastic Neighbor Embedding)
 
 Julia implementation of L.J.P. van der Maaten and G.E. Hintons [t-SNE visualisation technique](https://lvdmaaten.github.io/tsne/).
 
-The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` Julia packages.
+The scripts in the `examples` folder require `Plots`, `MLDatasets` and `RDatasets` Julia packages.
 
 ## Installation
 
@@ -18,20 +18,21 @@ The scripts in the `examples` folder require `Gadfly`, `MNIST` and `RDatasets` J
 ## Basic API usage
 
 ```jl
-using TSne, Statistics, MNIST
+using TSne, Statistics, MLDatasets
 
 rescale(A; dims=1) = (A .- mean(A, dims=dims)) ./ max.(std(A, dims=dims), eps())
 
-data, labels = traindata();
-data = convert(Matrix{Float64}, data[:, 1:2500])';
+alldata, allabels = MNIST.traindata(Float64);
+data = reshape(permutedims(alldata[:, :, 1:2500], (3, 1, 2)),
+               2500, size(alldata, 1)*size(alldata, 2));
 # Normalize the data, this should be done if there are large scale differences in the dataset
 X = rescale(data, dims=1);
 
 Y = tsne(X, 2, 50, 1000, 20.0);
 
-using Gadfly
-theplot = plot(x=Y[:,1], y=Y[:,2], color=string.(labels[1:size(Y,1)]))
-draw(PDF("myplot.pdf", 4inch, 3inch), theplot)
+using Plots
+theplot = scatter(Y[:,1], Y[:,2], marker=(2,2,:auto,stroke(0)), color=Int.(allabels[1:size(Y,1)]))
+Plots.pdf(theplot, "myplot.pdf")
 ```
 
 ![](example.png)

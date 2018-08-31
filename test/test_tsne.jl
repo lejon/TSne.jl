@@ -47,11 +47,17 @@
     end
 
     @testset "MNIST.traindata() dataset" begin
-        train_data, labels = MNIST.traindata()
-        X = train_data[:, 1:2500]'
+        Random.seed!(345678)
+        train_data, labels = MLDatasets.with_accept(true) do
+                MNIST.traindata(Float64)
+        end
+        X_labels = labels[1:2500] .+ 1
+        X = reshape(permutedims(train_data[:, :, 1:2500], (3, 1, 2)),
+                    2500, size(train_data, 1)*size(train_data, 2))
         X .-= mean(X, dims=1)
         X ./= std(X, dims=1)
-        Y = tsne(X, 2, 50, 30, 20, progress=true)
+
+        Y = tsne(X, 2, 50, 2000, 20, progress=true)
         @test size(Y) == (2500, 2)
     end
 end
