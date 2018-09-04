@@ -76,7 +76,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
             Hdiff = H - Htarget
             tries += 1
         end
-        verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
+        verbose && abs(Hdiff) > tol && @warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final column of P
         @assert Pcol[i] == 0.0 "Diagonal probability P[$i,$i]=$(Pcol[i]) not zero"
         @inbounds P[:, i] .= Pcol
