@@ -28,7 +28,7 @@ Performs a binary search to get P-values in such a way that each conditional
 Gaussian has the same perplexity.
 """
 function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Number = 30.0;
-                      max_iter::Integer = 50,
+                      maxiter::Integer = 50,
                       verbose::Bool=false, progress::Bool=true) where T<:Number
     (issymmetric(D) && all(x -> x >= 0, D)) ||
         throw(ArgumentError("Distance matrix D must be symmetric and positive"))
@@ -61,7 +61,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
 
         # Evaluate whether the perplexity is within tolerance
         tries = 0
-        while abs(Hdiff) > tol && tries < max_iter
+        while abs(Hdiff) > tol && tries < maxiter
             # If not, increase or decrease precision
             if Hdiff > 0.0
                 betamin = betai
@@ -122,8 +122,10 @@ pairwisesqdist(X::AbstractMatrix, dist::SemiMetric) =
     pairwise(dist, X').^2 # use Distances
 
 """
-    tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer=2, reduce_dims::Integer=0,
-         max_iter::Integer=1000, perplexity::Number=30.0; [keyword arguments])
+    tsne(X::Union{AbstractMatrix, AbstractVector};
+         ndims::Integer=2, reduce_dims::Union{Integer, Nothing}=nothing,
+         maxiter::Integer=1000, perplexity::Number=30.0,
+         [other keyword arguments])
 
 Apply t-SNE (t-Distributed Stochastic Neighbor Embedding) to `X`,
 i.e. embed its points (rows) into `ndims` dimensions preserving close neighbours.
@@ -139,10 +141,10 @@ the default is not to use PCA for initialization.
   use for calculating the distances between the rows
   (or elements, if `X` is a vector) of `X`
 * `reduce_dims` the number of the first dimensions of `X` PCA to use for t-SNE,
-  if 0, all available dimension are used
+  if `nothing`, all available dimension are used
 * `pca_init` whether to use the first `ndims` of `X` PCA as the initial t-SNE layout,
   if `false` (the default), the method is initialized with the random layout
-* `max_iter` how many iterations of t-SNE to do
+* `maxiter` how many iterations of t-SNE to do
 * `perplexity` the number of "effective neighbours" of a datapoint,
   typical values are from 5 to 50, the default is 30
 * `verbose` output informational and diagnostic messages
@@ -154,14 +156,41 @@ the default is not to use PCA for initialization.
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
-function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, reduce_dims::Integer = 0,
-              max_iter::Integer = 1000, perplexity::Number = 30.0;
+function tsne(X::Union{AbstractMatrix, AbstractVector},
+              ndims_psn::Union{Integer, Nothing} = nothing,
+              reduce_dims_psn::Union{Integer, Nothing} = nothing,
+              maxiter_psn::Union{Integer, Nothing} = nothing,
+              perplexity_psn::Union{Number, Nothing} = nothing;
+              ndims::Integer = 2,
+              reduce_dims::Union{Integer, Nothing} = nothing,
+              maxiter::Integer = 1000,
+              perplexity::Number = 30.0,
               distance::Union{Bool, Function, SemiMetric} = false,
               min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true,
               extended_output = false)
+    # FIXME remove (together with xxx_psn vars) after deprecation period
+    if ndims_psn !== nothing
+        Base.depwarn("Positional `ndims` argument is deprecated, use `ndims=` keyword argument", :tsne)
+        ndims = ndims_psn
+    end
+    if reduce_dims_psn !== nothing
+        Base.depwarn("Positional `reduce_dims` argument is deprecated, use `reduce_dims=` keyword argument", :tsne)
+        reduce_dims = reduce_dims_psn
+    end
+    if maxiter_psn !== nothing
+        Base.depwarn("Positional `maxiter` argument is deprecated, use `maxiter=` keyword argument", :tsne)
+        maxiter = maxiter_psn
+    end
+    if perplexity_psn !== nothing
+        Base.depwarn("Positional `perplexity` argument is deprecated, use `perplexity=` keyword argument", :tsne)
+        perplexity = perplexity_psn
+    end
+    # argument checks
+    ndims < 2 && throw(ArgumentError("`ndims` could not be less than 2"))
+    maxiter < 1 && throw(ArgumentError("`maxiter` should be positive"))
     # preprocess X
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
@@ -170,20 +199,20 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
 
         ini_Y_with_X = true
         X = X * (1.0/std(X)::eltype(X)) # note that X is copied
-        if 0<reduce_dims<size(X, 2)
-            reduce_dims = max(reduce_dims, ndims)
+        if reduce_dims !== nothing
+            ndims<=reduce_dims<size(X, 2) || throw(ArgumentError("Invalid reduce_dims=$reduce_dims should be in $(ndims:size(X,2))"))
             verbose && @info("Preprocessing the data using PCA...")
-            X = pca(X, reduce_dims)
+            X = pca(X, max(reduce_dims, ndims))
         end
     end
     n = size(X, 1)
     # Initialize embedding
     if pca_init && ini_Y_with_X
         verbose && @info("Using the first $ndims components of the data PCA as the initial layout...")
-        if reduce_dims >= ndims
+        if reduce_dims !== nothing && reduce_dims >= ndims
             Y = X[:, 1:ndims] # reuse X PCA
         else
-            @assert reduce_dims <= 0 # no X PCA
+            @assert reduce_dims === nothing # no X PCA
             Y = pca(X, ndims)
         end
     else
@@ -205,14 +234,14 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     sum_P = cheat_scale
 
     # Run iterations
-    progress && (pb = Progress(max_iter, "Computing t-SNE"))
+    progress && (pb = Progress(maxiter, "Computing t-SNE"))
     Q = fill!(similar(P), 0)     # temp upper-tri matrix with 1/(1 + (Y[i]-Y[j])²)
     Ymean = similar(Y, 1, ndims) # average for each embedded dimension
     sum_YY = similar(Y, n, 1)    # square norms of embedded points
     L = fill!(similar(P), 0)     # temp upper-tri matrix for KLdiv gradient calculation
     Lcolsums = similar(L, n, 1)  # sum(Symmetric(L), 2)
     last_kldiv = NaN
-    for iter in 1:max_iter
+    for iter in 1:maxiter
         # Compute pairwise affinities
         BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY', updates only the upper tri of Q
         @inbounds for i in 1:size(Q, 2)
@@ -266,13 +295,13 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         @inbounds Y .-= mean!(Ymean, Y)
 
         # stop cheating with P-values
-        if sum_P != 1.0 && iter >= min(max_iter, stop_cheat_iter)
+        if sum_P != 1.0 && iter >= min(maxiter, stop_cheat_iter)
             P .*= 1/sum_P
             sum_P = 1.0
         end
         # Compute the current value of cost function
-        if !isfinite(last_kldiv) || iter == max_iter ||
-            (progress && mod(iter, max(max_iter÷20, 10)) == 0)
+        if !isfinite(last_kldiv) || iter == maxiter ||
+            (progress && mod(iter, max(maxiter÷20, 10)) == 0)
             local kldiv = 0.0
             @inbounds for j in 1:size(P, 2)
                 Pj = view(P, :, j)

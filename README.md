@@ -28,7 +28,7 @@ data = reshape(permutedims(alldata[:, :, 1:2500], (3, 1, 2)),
 # Normalize the data, this should be done if there are large scale differences in the dataset
 X = rescale(data, dims=1);
 
-Y = tsne(X, 2, 50, 1000, 20.0);
+Y = tsne(X, ndims=2, reduce_dims=50, maxiter=1000, perplexity=20.0);
 
 using Plots
 theplot = scatter(Y[:,1], Y[:,2], marker=(2,2,:auto,stroke(0)), color=Int.(allabels[1:size(Y,1)]))

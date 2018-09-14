@@ -38,7 +38,7 @@ else
 end
 
 println("X dimensions are: ", size(X))
-Y = tsne(X, 2, initial_dims, iterations, perplexity)
+Y = tsne(X, ndims=2, reduce_dims=initial_dims, maxiter=iterations, perplexity=perplexity)
 println("Y dimensions are: ", size(Y))
 
 writecsv(plotname*"_tsne_out.csv", Y)

@@ -52,7 +52,7 @@ data = convert(Matrix{Float64}, dataset)
 X = rescale(data)
 
 # Run t-SNE
-Y = tsne(X, 2, 50, 1000, 20.0)
+Y = tsne(X, ndims=2, reduce_dims=50, maxiter=1000, perplexity=20.0)
 
 using Gadfly
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
