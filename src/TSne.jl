@@ -142,8 +142,9 @@ the default is not to use PCA for initialization.
   (or elements, if `X` is a vector) of `X`
 * `reduce_dims` the number of the first dimensions of `X` PCA to use for t-SNE,
   if `nothing`, all available dimension are used
-* `pca_init` whether to use the first `ndims` of `X` PCA as the initial t-SNE layout,
-  if `false` (the default), the method is initialized with the random layout
+* `init` how to generate the initial t-SNE layout:
+ - `:random` (the default): use normally-distributed random points
+ - `:pca`: use the first `ndims` of `X` PCA
 * `maxiter` how many iterations of t-SNE to do
 * `perplexity` the number of "effective neighbours" of a datapoint,
   typical values are from 5 to 50, the default is 30
@@ -166,7 +167,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector},
               maxiter::Integer = 1000,
               perplexity::Number = 30.0,
               distance::Union{Bool, Function, SemiMetric} = false,
-              min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
+              min_gain::Number = 0.01, eta::Number = 200.0, inilayout::Symbol = :random,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true,
@@ -207,7 +208,8 @@ function tsne(X::Union{AbstractMatrix, AbstractVector},
     end
     n = size(X, 1)
     # Initialize embedding
-    if pca_init && ini_Y_with_X
+    if inilayout == :pca
+        ini_Y_with_X || error("X is a distance matrix, cannot use its PCA as initial layout")
         verbose && @info("Using the first $ndims components of the data PCA as the initial layout...")
         if reduce_dims !== nothing && reduce_dims >= ndims
             Y = X[:, 1:ndims] # reuse X PCA
@@ -215,9 +217,11 @@ function tsne(X::Union{AbstractMatrix, AbstractVector},
             @assert reduce_dims === nothing # no X PCA
             Y = pca(X, ndims)
         end
-    else
+    elseif inilayout == :random
         verbose && @info("Starting with random layout...")
         Y = randn(n, ndims)
+    else
+        throw(ArgumentError("Unknown initial layout generation method: $inilayout"))
     end
 
     dY = fill!(similar(Y), 0)     # gradient vector

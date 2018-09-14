@@ -7,9 +7,9 @@
         Y = tsne(X, ndims=3, maxiter=10, verbose=false)
         @test size(Y) == (150, 3)
         tsne(X, ndims=2, maxiter=10, verbose=true, progress=false)
-        Y = tsne(X, ndims=2, maxiter=10, pca_init=true, cheat_scale=1.0, progress=false)
+        Y = tsne(X, ndims=2, maxiter=10, inilayout=:pca, cheat_scale=1.0, progress=false)
         @test size(Y) == (150, 2)
-        Y, beta, kldiv = tsne(X, ndims=2, maxiter=10, pca_init=true, cheat_scale=1.0, progress=false, extended_output=true)
+        Y, beta, kldiv = tsne(X, ndims=2, maxiter=10, inilayout=:pca, cheat_scale=1.0, progress=false, extended_output=true)
         @test size(Y) == (150, 2)
         @test beta isa AbstractVector
         @test length(beta) == 150
