@@ -24,11 +24,7 @@ Options:
 Normalize `A` columns, so that the mean and standard deviation
 of each column are 0 and 1, resp.
 """
-function rescale(A, dim::Integer=1)
-    res = A .- mean(A, dim)
-    res ./= map!(x -> x > 0.0 ? x : 1.0, std(A, dim))
-    res
-end
+rescale(A; dims=1) = (A .- mean(A, dims=dims)) ./ max.(std(A, dims=dims), eps())
 
 using DocOpt
 
