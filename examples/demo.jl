@@ -5,11 +5,7 @@ using TSne
 Normalize `A` columns, so that the mean and standard deviation
 of each column are 0 and 1, resp.
 """
-function rescale(A, dim::Integer=1)
-    res = A .- mean(A, dim)
-    res ./= map!(x -> x > 0.0 ? x : 1.0, std(A, dim))
-    res
-end
+rescale(A; dims=1) = (A .- mean(A, dims=dims)) ./ max.(std(A, dims=dims), eps())
 
 if length(ARGS)==0
     println("usage:\n\tjulia demo.jl iris\n\tjulia demo.jl mnist")
@@ -21,7 +17,7 @@ if ARGS[1] == "iris"
     println("Using Iris dataset.")
     iris = dataset("datasets","iris")
     X = convert(Matrix{Float64}, iris[:, 1:4])
-    labels = iris[:, 5]
+    labels = iris[1:size(X, 1), 5]
     plotname = "iris"
     initial_dims = -1
     iterations = 1500
@@ -29,10 +25,10 @@ if ARGS[1] == "iris"
 elseif ARGS[1] == "mnist"
     using MLDatasets
     println("Using MNIST dataset.")
-    X, labels = MNIST.traindata(Float64);
-    npts = min(2500, size(X, 2), size(labels))
-    labels = labels[1:npts]
-    X = rescale(X[:, 1:npts]')
+    all_X, all_labels = MNIST.traindata(Float64)
+    npts = min(2500, size(all_X, 2), size(all_labels))
+    labels = all_labels[1:npts]
+    X = rescale(all_X[:, 1:npts]')
     plotname = "mnist"
     initial_dims = 50
     iterations = 1000
