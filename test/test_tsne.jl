@@ -9,11 +9,12 @@
         tsne(X, ndims=2, maxiter=10, verbose=true, progress=false)
         Y = tsne(X, ndims=2, maxiter=10, inilayout=:pca, cheat_scale=1.0, progress=false)
         @test size(Y) == (150, 2)
-        Y, beta, kldiv = tsne(X, ndims=2, maxiter=10, inilayout=:pca, cheat_scale=1.0, progress=false, extended_output=true)
-        @test size(Y) == (150, 2)
-        @test beta isa AbstractVector
-        @test length(beta) == 150
-        @test isfinite(kldiv)
+        extout = tsne(X, ndims=2, maxiter=10, inilayout=:pca, cheat_scale=1.0, progress=false, extended_output=true)
+        @test extout isa TSNEOutput
+        @test size(extout.positions) == (150, 2)
+        @test extout.perplexities isa AbstractVector
+        @test length(extout.perplexities) == 150
+        @test isfinite(extout.kldiv)
 
         @testset "distance = true" begin
             @test_throws ArgumentError tsne(X, ndims=3, maxiter=10, distance=true, verbose=false)

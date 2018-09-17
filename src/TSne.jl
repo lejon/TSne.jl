@@ -3,7 +3,7 @@ module TSne
 using LinearAlgebra, Statistics, Distances, ProgressMeter
 using Printf: @sprintf
 
-export tsne
+export tsne, TSNEOutput
 
 """
 Compute the point perplexities `P` given its squared distances to the other points `D`
@@ -122,6 +122,15 @@ pairwisesqdist(X::AbstractMatrix, dist::SemiMetric) =
     pairwise(dist, X').^2 # use Distances
 
 """
+Returned by `tsne(..., extended_output=true)`.
+"""
+struct TSNEOutput{T <: Number}
+    kldiv::T
+    perplexities::Vector{T}
+    positions::Matrix{T}
+end
+
+"""
     tsne(X::Union{AbstractMatrix, AbstractVector};
          ndims::Integer=2, reduce_dims::Union{Integer, Nothing}=nothing,
          maxiter::Integer=1000, perplexity::Number=30.0,
@@ -152,7 +161,7 @@ the default is not to use PCA for initialization.
 * `progress` display progress meter during t-SNE optimization
 * `min_gain`, `eta`, `initial_momentum`, `final_momentum`, `momentum_switch_iter`,
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
-* `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
+* `extended_output` if `true`, returns a `TSNEOutput` instance containing embedded coordinates matrix,
   point perplexities and final Kullback-Leibler divergence
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
@@ -171,7 +180,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector},
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true,
-              extended_output = false)
+              extended_output::Union{Bool, Nothing} = false)
     # FIXME remove (together with xxx_psn vars) after deprecation period
     if ndims_psn !== nothing
         Base.depwarn("Positional `ndims` argument is deprecated, use `ndims=` keyword argument", :tsne)
@@ -330,7 +339,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector},
     if !extended_output
         return Y
     else
-        return Y, beta, last_kldiv
+        return TSNEOutput(last_kldiv, beta, Y)
     end
 end
 
