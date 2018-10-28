@@ -84,7 +84,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     end
     progress && finish!(pb)
     # Return final P-matrix
-    verbose && @info(@sprintf("Mean σ=%.4f", mean(sqrt.(1 ./ beta))))
+    verbose && @info(@sprintf("Median σ=%.4f", median(sqrt.(1 ./ beta))))
     return P, beta
 end
 
