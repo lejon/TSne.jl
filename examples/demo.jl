@@ -1,13 +1,18 @@
 using Gadfly
+using Cairo
 using TSne
+using Statistics: mean, std
+using CSV
+using DataFrames: DataFrame
+using DelimitedFiles: writedlm
 
 """
 Normalize `A` columns, so that the mean and standard deviation
 of each column are 0 and 1, resp.
 """
 function rescale(A, dim::Integer=1)
-    res = A .- mean(A, dim)
-    res ./= map!(x -> x > 0.0 ? x : 1.0, std(A, dim))
+    res = A .- mean(A, dims=dim)
+    res ./= map(x -> x > 0.0 ? x : 1.0, std(A, dims=dim))
     res
 end
 
@@ -30,9 +35,9 @@ elseif ARGS[1] == "mnist"
     using MLDatasets
     println("Using MNIST dataset.")
     X, labels = MNIST.traindata(Float64);
-    npts = min(2500, size(X, 2), size(labels))
-    labels = labels[1:npts]
-    X = rescale(X[:, 1:npts]')
+    npts = min(2500, size(X, 3), length(labels))
+    labels = string.(labels[1:npts])
+    X = rescale(transpose(reshape(X[:, :, 1:npts], (28*28, :))))
     plotname = "mnist"
     initial_dims = 50
     iterations = 1000
@@ -45,9 +50,9 @@ println("X dimensions are: ", size(X))
 Y = tsne(X, 2, initial_dims, iterations, perplexity)
 println("Y dimensions are: ", size(Y))
 
-writecsv(plotname*"_tsne_out.csv", Y)
+CSV.write(plotname*"_tsne_out.csv", DataFrame(Y), writeheader=false)
 open("labels.txt", "w") do io
-    writedlm(io, labels)
+    writedlm(io, (labels,), '\n')
 end
 
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
