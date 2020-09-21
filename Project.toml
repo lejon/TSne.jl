@@ -1,5 +1,5 @@
 name = "TSne"
-uuid = "215551b3-6e2f-4781-bc0c-96e8a86eb001"
+uuid = "24678dba-d5e9-5843-a4c6-250288b04835"
 version = "1.3.0"
 
 [deps]
