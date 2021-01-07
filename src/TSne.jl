@@ -28,18 +28,29 @@ Performs a binary search to get P-values in such a way that each conditional
 Gaussian has the same perplexity.
 """
 function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Number = 30.0;
-                      max_iter::Integer = 50,
-                      verbose::Bool=false, progress::Bool=true) where T<:Number
+                      max_iter::Integer = 50, verbose::Bool=false, progress::Bool=true) where T<:Number
+    n = size(D, 1)
+    P = fill(zero(T), n, n) # perplexities matrix
+    beta = fill(one(T), n)  # vector of Normal distribution precisions for each point
+    Di = fill(zero(T), n)
+    Pcol = fill(zero(T), n)
+
+    perplexities!(P, beta, D, Di, Pcol, tol, perplexity,
+                  max_iter=max_iter, verbose=verbose, progress=progress)
+
+    return P, beta
+end
+
+function perplexities!(P::AbstractMatrix{T}, beta::AbstractVector{T}, D::AbstractMatrix{T},
+                       Di::AbstractVector{T}, Pcol::AbstractVector{T}, tol::Number = 1e-5,
+                       perplexity::Number = 30.0; max_iter::Integer = 50,
+                       verbose::Bool=false, progress::Bool=true) where T<:Number
     (issymmetric(D) && all(x -> x >= 0, D)) ||
         throw(ArgumentError("Distance matrix D must be symmetric and positive"))
 
     # initialize
     n = size(D, 1)
-    P = fill(zero(T), n, n) # perplexities matrix
-    beta = fill(one(T), n)  # vector of Normal distribution precisions for each point
     Htarget = log(perplexity) # the expected entropy
-    Di = fill(zero(T), n)
-    Pcol = fill(zero(T), n)
 
     # Loop over all datapoints
     progress && (pb = Progress(n, "Computing point perplexities"))
@@ -85,7 +96,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     progress && finish!(pb)
     # Return final P-matrix
     verbose && @info(@sprintf("Mean σ=%.4f", mean(sqrt.(1 ./ beta))))
-    return P, beta
+    return nothing
 end
 
 """
@@ -198,8 +209,14 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     # Compute P-values
     verbose && (distance !== true) && @info("Computing pairwise distances...")
     D = pairwisesqdist(X, distance)
-    P, beta = perplexities(D, 1e-5, perplexity,
-                           verbose=verbose, progress=progress)
+    # Init perplexities
+    P = zeros(eltype(D), n, n)
+    beta = ones(eltype(D), n)
+    # buffer No. 1, sum_YY = similar(Y, n, 1), square norms of embedded points
+    buf1 = zeros(eltype(D), n)
+    # buffer No. 2, Lcolsums = similar(L, n, 1), sum(Symmetric(L), 2)
+    buf2 = zeros(eltype(D), n)
+    perplexities!(P, beta, D, buf1, buf2, 1e-5, perplexity, verbose=verbose, progress=progress)
     P .+= P' # make P symmetric
     P .*= cheat_scale/sum(P) # normalize + early exaggeration
     sum_P = cheat_scale
@@ -208,23 +225,22 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     progress && (pb = Progress(max_iter, "Computing t-SNE"))
     Q = fill!(similar(P), 0)     # temp upper-tri matrix with 1/(1 + (Y[i]-Y[j])²)
     Ymean = similar(Y, 1, ndims) # average for each embedded dimension
-    sum_YY = similar(Y, n, 1)    # square norms of embedded points
     L = fill!(similar(P), 0)     # temp upper-tri matrix for KLdiv gradient calculation
-    Lcolsums = similar(L, n, 1)  # sum(Symmetric(L), 2)
     last_kldiv = NaN
     for iter in 1:max_iter
         # Compute pairwise affinities
         BLAS.syrk!('U', 'N', 1.0, Y, 0.0, Q) # Q=YY', updates only the upper tri of Q
         @inbounds for i in 1:size(Q, 2)
-            sum_YY[i] = Q[i, i]
+            buf1[i] = Q[i, i]
         end
         sum_Q = 0.0
         @inbounds for j in 1:size(Q, 2)
-            sum_YYj_p1 = 1.0 + sum_YY[j]
+            sum_YYj_p1 = 1.0 + buf1[j] # 1 + (yj)^2
             Qj = view(Q, :, j)
             Qj[j] = 0.0
             for i in 1:(j-1)
-                sqdist_p1 = sum_YYj_p1 - 2.0 * Qj[i] + sum_YY[i]
+                # squared dji + 1 = 1 + (yj)^2 - 2 * yi * yj + (yi)^2
+                sqdist_p1 = sum_YYj_p1 - 2.0 * Qj[i] + buf1[i]
                 @fastmath Qj[i] = ifelse(sqdist_p1 > 1.0, 1.0 / sqdist_p1, 1.0)
                 sum_Q += Qj[i]
             end
@@ -233,7 +249,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
 
         # Compute the gradient
         inv_sum_Q = 1.0 / sum_Q
-        fill!(Lcolsums, 0.0) # column sums
+        fill!(buf2, 0.0) # column sums
         # fill the upper triangle of L (gradient)
         @inbounds for j in 1:size(L, 2)
             Lj = view(L, :, j)
@@ -242,12 +258,12 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
             Lsumj = 0.0
             for i in 1:(j-1)
                 @fastmath Lj[i] = l = (Pj[i] - Qj[i]*inv_sum_Q) * Qj[i]
-                Lcolsums[i] += l
+                buf2[i] += l
                 Lsumj += l
             end
-            Lcolsums[j] += Lsumj
+            buf2[j] += Lsumj
         end
-        @inbounds for (i, ldiag) in enumerate(Lcolsums)
+        @inbounds for (i, ldiag) in enumerate(buf2)
             L[i, i] = -ldiag
         end
         # dY = -4LY
