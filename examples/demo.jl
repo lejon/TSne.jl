@@ -37,7 +37,7 @@ elseif ARGS[1] == "mnist"
     X, labels = MNIST.traindata(Float64);
     npts = min(2500, size(X, 3), length(labels))
     labels = string.(labels[1:npts])
-    X = rescale(transpose(reshape(X[:, :, 1:npts], (28*28, :))))
+    X = rescale(transpose(reshape(X[:, :, 1:npts], (size(X, 1)*size(X, 2), :))))
     plotname = "mnist"
     initial_dims = 50
     iterations = 1000
