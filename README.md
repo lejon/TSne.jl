@@ -1,7 +1,7 @@
 t-SNE (t-Stochastic Neighbor Embedding)
 =======================================
 
-[![Build Status]((https://github.com/lejon/TSne.jl/workflows/CI/badge.svg)](https://github.com/lejon/TSne.jl/actions?query=workflow%3ACI+branch%3Amaster)
+[![Build Status](https://github.com/lejon/TSne.jl/workflows/CI/badge.svg)](https://github.com/lejon/TSne.jl/actions?query=workflow%3ACI+branch%3Amaster)
 [![Coverage Status](https://coveralls.io/repos/github/lejon/TSne.jl/badge.svg)](https://coveralls.io/github/lejon/TSne.jl)
 
 Julia implementation of L.J.P. van der Maaten and G.E. Hintons [t-SNE visualisation technique](https://lvdmaaten.github.io/tsne/).
