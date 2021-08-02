@@ -25,7 +25,7 @@ if ARGS[1] == "iris"
     using RDatasets
     println("Using Iris dataset.")
     iris = dataset("datasets","iris")
-    X = convert(Matrix{Float64}, iris[:, 1:4])
+    X = hcat(eachcol(iris)[1:4]...)
     labels = iris[:, 5]
     plotname = "iris"
     initial_dims = -1
