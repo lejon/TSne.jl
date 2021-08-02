@@ -1,7 +1,7 @@
 @testset "tsne()" begin
     @testset "API tests" begin
         iris = dataset("datasets", "iris")
-        X = convert(Matrix{Float64}, iris[:, 1:4])
+        X = hcat(eachcol(iris)[1:4]...)
         Y = tsne(X, 2, -1, 10, 15, verbose=true)
         @test size(Y) == (150, 2)
         Y = tsne(X, 3, -1, 10, 15, verbose=false)
@@ -42,7 +42,7 @@
 
     @testset "Iris dataset" begin
         iris = dataset("datasets", "iris")
-        X = convert(Matrix{Float64}, iris[:, 1:4])
+        X = hcat(eachcol(iris)[1:4]...)
         # embed in 3D
         Y3d = tsne(X, 3, -1, 100, 15, progress=false)
         @test size(Y3d) == (150, 3)
@@ -56,11 +56,10 @@
         train_data, labels = MLDatasets.with_accept(true) do
                 MNIST.traindata(Float64)
         end
-        X_labels = labels[1:2500] .+ 1
         X = reshape(permutedims(train_data[:, :, 1:2500], (3, 1, 2)),
                     2500, size(train_data, 1)*size(train_data, 2))
         X .-= mean(X, dims=1)
-        X ./= std(X, dims=1)
+        X ./= map(x -> ifelse(x > 0, x, 1.0), std(X, dims=1))
 
         Y = tsne(X, 2, 50, 2000, 20, progress=true)
         @test size(Y) == (2500, 2)
