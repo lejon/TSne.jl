@@ -112,13 +112,13 @@ kldivel(p, q) = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p))
 pairwisesqdist(X::AbstractMatrix, dist::Bool) =
     dist ? X.^2 : pairwise(SqEuclidean(), X')
 
-pairwisesqdist(X::AbstractVector, dist::Function) =
+pairwisesqdist(X::AbstractVector, dist::Union{Function, PreMetric}) =
     [dist(x, y)^2 for x in X, y in X] # note: some redundant calc since dist should be symmetric
 
 pairwisesqdist(X::AbstractMatrix, dist::Function) =
-    [dist(view(X, i, :), view(X, j, :))^2 for i in 1:size(X, 1), j in 1:size(X, 1)] # note: some redundant calc since dist should be symmetric
+    [dist(x, y)^2 for x in eachrow(X), y in eachrow(X)] # note: some redundant calc since dist should be symmetric
 
-pairwisesqdist(X::AbstractMatrix, dist::SemiMetric) =
+pairwisesqdist(X::AbstractMatrix, dist::PreMetric) =
     pairwise(dist, X').^2 # use Distances
 
 """
