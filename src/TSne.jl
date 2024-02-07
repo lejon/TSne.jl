@@ -1,6 +1,6 @@
 module TSne
 
-using LinearAlgebra, Statistics, Distances, ProgressMeter
+using LinearAlgebra, Statistics, Distances, ProgressMeter, Random
 using Printf: @sprintf
 
 export tsne
@@ -151,6 +151,8 @@ the default is not to use PCA for initialization.
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
 * `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
   point perplexities and final Kullback-Leibler divergence
+* `random_seed` the seed for the random number generator (leave `nothing` for no 
+   seeding)
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
@@ -161,7 +163,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true,
-              extended_output = false)
+              extended_output = false, random_seed::Union{Nothing, Integer} = nothing)
     # preprocess X
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
@@ -188,6 +190,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         end
     else
         verbose && @info("Starting with random layout...")
+        Random.seed!(random_seed)
         Y = randn(n, ndims)
     end
 

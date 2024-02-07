@@ -4,6 +4,10 @@
         X = hcat(eachcol(iris)[1:4]...)
         Y = tsne(X, 2, -1, 10, 15, verbose=true)
         @test size(Y) == (150, 2)
+        Y1 = tsne(X, 2, -1, 10, 15, random_seed=123)
+        @test Y1 != Y
+        Y2 = tsne(X, 2, -1, 10, 15, random_seed=123)
+        @test Y1 == Y2
         Y = tsne(X, 3, -1, 10, 15, verbose=false)
         @test size(Y) == (150, 3)
         tsne(X, 2, -1, 10, 15, verbose=true, progress=false)
