@@ -1,6 +1,6 @@
 module TSne
 
-using LinearAlgebra, Statistics, Distances, ProgressMeter
+using LinearAlgebra, Statistics, Distances, ProgressMeter, Random
 using Printf: @sprintf
 
 export tsne
@@ -42,7 +42,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     Pcol = fill(zero(T), n)
 
     # Loop over all datapoints
-    progress && (pb = Progress(n, "Computing point perplexities"))
+    progress && (pb = Progress(n, desc = "Computing point perplexities"))
     for i in 1:n
         progress && update!(pb, i)
 
@@ -76,7 +76,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
             Hdiff = H - Htarget
             tries += 1
         end
-        verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
+        verbose && abs(Hdiff) > tol && @warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final column of P
         @assert Pcol[i] == 0.0 "Diagonal probability P[$i,$i]=$(Pcol[i]) not zero"
         @inbounds P[:, i] .= Pcol
@@ -110,7 +110,7 @@ kldivel(p, q) = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p))
 # pairwise squared distance
 # if X is the matrix of objects, then the distance between its rows
 pairwisesqdist(X::AbstractMatrix, dist::Bool) =
-    dist ? X.^2 : pairwise(SqEuclidean(), X')
+    dist ? X.^2 : pairwise(SqEuclidean(), X', dims=2)
 
 pairwisesqdist(X::AbstractVector, dist::Union{Function, PreMetric}) =
     [dist(x, y)^2 for x in X, y in X] # note: some redundant calc since dist should be symmetric
@@ -119,7 +119,7 @@ pairwisesqdist(X::AbstractMatrix, dist::Function) =
     [dist(x, y)^2 for x in eachrow(X), y in eachrow(X)] # note: some redundant calc since dist should be symmetric
 
 pairwisesqdist(X::AbstractMatrix, dist::PreMetric) =
-    pairwise(dist, X').^2 # use Distances
+    pairwise(dist, X', dims=2).^2 # use Distances
 
 """
     tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer=2, reduce_dims::Integer=0,
@@ -151,6 +151,8 @@ the default is not to use PCA for initialization.
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
 * `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
   point perplexities and final Kullback-Leibler divergence
+* `random_seed` the seed for the random number generator (leave `nothing` for no 
+   seeding)
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
@@ -161,7 +163,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true,
-              extended_output = false)
+              extended_output = false, random_seed::Union{Nothing, Integer} = nothing)
     # preprocess X
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
@@ -188,6 +190,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         end
     else
         verbose && @info("Starting with random layout...")
+        Random.seed!(random_seed)
         Y = randn(n, ndims)
     end
 
@@ -205,7 +208,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     sum_P = cheat_scale
 
     # Run iterations
-    progress && (pb = Progress(max_iter, "Computing t-SNE"))
+    progress && (pb = Progress(max_iter, desc="Computing t-SNE"))
     Q = fill!(similar(P), 0)     # temp upper-tri matrix with 1/(1 + (Y[i]-Y[j])²)
     Ymean = similar(Y, 1, ndims) # average for each embedded dimension
     sum_YY = similar(Y, n, 1)    # square norms of embedded points

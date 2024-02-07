@@ -4,6 +4,10 @@
         X = hcat(eachcol(iris)[1:4]...)
         Y = tsne(X, 2, -1, 10, 15, verbose=true)
         @test size(Y) == (150, 2)
+        Y1 = tsne(X, 2, -1, 10, 15, random_seed=123)
+        @test Y1 != Y
+        Y2 = tsne(X, 2, -1, 10, 15, random_seed=123)
+        @test Y1 == Y2
         Y = tsne(X, 3, -1, 10, 15, verbose=false)
         @test size(Y) == (150, 3)
         tsne(X, 2, -1, 10, 15, verbose=true, progress=false)
@@ -51,10 +55,10 @@
         @test size(Y2d) == (150, 2)
     end
 
-    @testset "MNIST.traindata() dataset" begin
+    @testset "MNIST training dataset" begin
         Random.seed!(345678)
         train_data, labels = MLDatasets.with_accept(true) do
-                MNIST.traindata(Float64)
+                MNIST(; Tx=Float64, split=:train)[:]
         end
         X = reshape(permutedims(train_data[:, :, 1:2500], (3, 1, 2)),
                     2500, size(train_data, 1)*size(train_data, 2))
