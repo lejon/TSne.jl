@@ -55,10 +55,10 @@
         @test size(Y2d) == (150, 2)
     end
 
-    @testset "MNIST.traindata() dataset" begin
+    @testset "MNIST training dataset" begin
         Random.seed!(345678)
         train_data, labels = MLDatasets.with_accept(true) do
-                MNIST.traindata(Float64)
+                MNIST(; Tx=Float64, split=:train)[:]
         end
         X = reshape(permutedims(train_data[:, :, 1:2500], (3, 1, 2)),
                     2500, size(train_data, 1)*size(train_data, 2))
