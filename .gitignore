@@ -1,0 +1,11 @@
+# Julia
+Manifest.toml
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+# Generated t-SNE output artifacts
+*.png
+*.pdf
+*_tsne_out.csv
+labels.txt

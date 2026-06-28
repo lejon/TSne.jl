@@ -1,9 +1,13 @@
 module TSne
 
-using LinearAlgebra, Statistics, Distances, ProgressMeter
+using LinearAlgebra, Statistics, Distances, ProgressMeter, MultivariateStats, TSVD, Random
 using Printf: @sprintf
+using Base.Threads
 
 export tsne
+
+include("spacetree.jl")
+include("barneshut.jl")
 
 """
 Compute the point perplexities `P` given its squared distances to the other points `D`
@@ -42,7 +46,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     Pcol = fill(zero(T), n)
 
     # Loop over all datapoints
-    progress && (pb = Progress(n, "Computing point perplexities"))
+    progress && (pb = Progress(n; desc="Computing point perplexities"))
     for i in 1:n
         progress && update!(pb, i)
 
@@ -76,7 +80,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
             Hdiff = H - Htarget
             tries += 1
         end
-        verbose && abs(Hdiff) > tol && warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
+        verbose && abs(Hdiff) > tol && @warn("P[$i]: perplexity error is above tolerance: $(Hdiff)")
         # Set the final column of P
         @assert Pcol[i] == 0.0 "Diagonal probability P[$i,$i]=$(Pcol[i]) not zero"
         @inbounds P[:, i] .= Pcol
@@ -84,7 +88,7 @@ function perplexities(D::AbstractMatrix{T}, tol::Number = 1e-5, perplexity::Numb
     end
     progress && finish!(pb)
     # Return final P-matrix
-    verbose && @info(@sprintf("Mean σ=%.4f", mean(sqrt.(1 ./ beta))))
+    verbose && @info(@sprintf("Mean σ=%.4f", mean(sqrt(1.0 / b) for b in beta)))
     return P, beta
 end
 
@@ -92,16 +96,23 @@ end
     pca(X::Matrix, ncols::Integer = 50)
 
 Run PCA on `X` to reduce the number of its dimensions to `ndims`.
-
-FIXME use PCA routine from JuliaStats?
+Uses truncated SVD (Float32) when `d > max(1000, 20*ndims)` to avoid
+allocating the d×d covariance matrix for high-dimensional inputs.
 """
 function pca(X::AbstractMatrix, ndims::Integer = 50)
     (n, d) = size(X)
     (d <= ndims) && return X
-    Y = X .- mean(X, dims=1)
-    C = Symmetric((Y' * Y) ./ (n-1))
-    Ceig = eigen(C, (d-ndims+1):d) # take eigvects for top ndims largest eigvals
-    return Y * reverse(Ceig.vectors, dims=2)
+    if d > max(1000, 20 * ndims)
+        # High-d path: truncated SVD in Float32 avoids the d×d covariance matrix.
+        # Memory: O(n·d) instead of O(d²); time: O(n·d·ndims) instead of O(d²·ndims).
+        Xf = Float32.(X)
+        Xf .-= mean(Xf, dims=1)
+        _, _, V = tsvd(Xf, ndims)   # V is d×ndims
+        return Float64.(Xf * V)     # n×ndims, back to Float64
+    else
+        M = fit(PCA, float(X)'; maxoutdim=ndims)
+        return Matrix(MultivariateStats.predict(M, float(X)')')
+    end
 end
 
 # K-L divergence element
@@ -110,7 +121,7 @@ kldivel(p, q) = ifelse(p > zero(p) && q > zero(q), p*log(p/q), zero(p))
 # pairwise squared distance
 # if X is the matrix of objects, then the distance between its rows
 pairwisesqdist(X::AbstractMatrix, dist::Bool) =
-    dist ? X.^2 : pairwise(SqEuclidean(), X')
+    dist ? X.^2 : pairwise(SqEuclidean(), X', dims=2)
 
 pairwisesqdist(X::AbstractVector, dist::Union{Function, PreMetric}) =
     [dist(x, y)^2 for x in X, y in X] # note: some redundant calc since dist should be symmetric
@@ -119,7 +130,7 @@ pairwisesqdist(X::AbstractMatrix, dist::Function) =
     [dist(x, y)^2 for x in eachrow(X), y in eachrow(X)] # note: some redundant calc since dist should be symmetric
 
 pairwisesqdist(X::AbstractMatrix, dist::PreMetric) =
-    pairwise(dist, X').^2 # use Distances
+    pairwise(dist, X', dims=2).^2 # use Distances
 
 """
     tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer=2, reduce_dims::Integer=0,
@@ -151,6 +162,12 @@ the default is not to use PCA for initialization.
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
 * `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
   point perplexities and final Kullback-Leibler divergence
+* `method` either `:exact` (default, O(n²)) or `:barneshut` (O(n log n) approximation)
+* `theta` Barnes-Hut opening angle (default 0.5). Lower = more accurate, higher = faster.
+  Typical range: 0.2–0.8.
+* `max_depth` Barnes-Hut tree depth limit (default 7). Lower = fewer tree nodes
+  and faster large-dataset runs, higher = finer repulsive-force approximation.
+  Only used when `method = :barneshut`.
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
@@ -161,7 +178,27 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
               verbose::Bool = false, progress::Bool=true,
-              extended_output = false)
+              extended_output = false,
+              method::Symbol = :exact,
+              theta::Number = 0.5,
+              max_depth::Integer = 7,
+              rng::AbstractRNG = Random.default_rng())
+    if method == :barneshut
+        return tsne_bh(X, ndims, reduce_dims, max_iter, perplexity;
+                       distance=distance, pca_init=pca_init,
+                       min_gain=min_gain, eta=eta,
+                       initial_momentum=initial_momentum,
+                       final_momentum=final_momentum,
+                       momentum_switch_iter=momentum_switch_iter,
+                       stop_cheat_iter=stop_cheat_iter,
+                       cheat_scale=cheat_scale,
+                       theta=theta,
+                       max_depth=max_depth,
+                       verbose=verbose, progress=progress,
+                       extended_output=extended_output,
+                       rng=rng)
+    end
+
     # preprocess X
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
@@ -169,7 +206,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         ndims < size(X, 2) || throw(DimensionMismatch("X has fewer dimensions ($(size(X,2))) than ndims=$ndims"))
 
         ini_Y_with_X = true
-        X = X * (1.0/std(X)::eltype(X)) # note that X is copied
+        X = X * (1.0/std(X)) # note that X is copied
         if 0<reduce_dims<size(X, 2)
             reduce_dims = max(reduce_dims, ndims)
             verbose && @info("Preprocessing the data using PCA...")
@@ -188,7 +225,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
         end
     else
         verbose && @info("Starting with random layout...")
-        Y = randn(n, ndims)
+        Y = randn(rng, n, ndims)
     end
 
     dY = fill!(similar(Y), 0)     # gradient vector
@@ -205,7 +242,7 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     sum_P = cheat_scale
 
     # Run iterations
-    progress && (pb = Progress(max_iter, "Computing t-SNE"))
+    progress && (pb = Progress(max_iter; desc="Computing t-SNE"))
     Q = fill!(similar(P), 0)     # temp upper-tri matrix with 1/(1 + (Y[i]-Y[j])²)
     Ymean = similar(Y, 1, ndims) # average for each embedded dimension
     sum_YY = similar(Y, n, 1)    # square norms of embedded points

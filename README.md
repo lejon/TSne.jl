@@ -6,60 +6,80 @@ t-SNE (t-Stochastic Neighbor Embedding)
 
 Julia implementation of L.J.P. van der Maaten and G.E. Hintons [t-SNE visualisation technique](https://lvdmaaten.github.io/tsne/).
 
-The scripts in the `examples` folder require `Plots`, `MLDatasets` and `RDatasets` Julia packages.
-
 ## Installation
 
-  `julia> Pkg.add("TSne")`
+```julia
+julia> Pkg.add("TSne")
+```
 
-## Basic API usage
-`tsne(X, ndim, reduce_dims, max_iter, perplexit; [keyword arguments])`
-         
-Apply t-SNE (t-Distributed Stochastic Neighbor Embedding) to `X`,
-i.e. embed its points (rows) into `ndims` dimensions preserving close neighbours.
-Returns the points×`ndims` matrix of calculated embedded coordinates.
+## Basic API
 
-- `X`: AbstractMatrix or AbstractVector. If `X` is a matrix, then rows are observations and columns are features.
-- `ndims`: Dimension of the embedded space.
-- `reduce_dims` the number of the first dimensions of `X` PCA to use for t-SNE,
-  if 0, all available dimension are used
-- `max_iter`: Maximum number of iterations for the optimization
-- `perplexity': The perplexity is related to the number of nearest neighbors that
-        is used in other manifold learning algorithms. Larger datasets
-        usually require a larger perplexity. Consider selecting a value
-        between 5 and 50. Different values can result in significantly
-        different results
+```julia
+tsne(X, ndims, reduce_dims, max_iter, perplexity; [keyword arguments])
+```
 
-**Optional Arguments**
-* `distance` if `true`, specifies that `X` is a distance matrix,
-  if of type `Function` or `Distances.SemiMetric`, specifies the function to
-  use for calculating the distances between the rows
-  (or elements, if `X` is a vector) of `X`
-* `pca_init` whether to use the first `ndims` of `X` PCA as the initial t-SNE layout,
-  if `false` (the default), the method is initialized with the random layout
-* `max_iter` how many iterations of t-SNE to do
-* `perplexity` the number of "effective neighbours" of a datapoint,
-  typical values are from 5 to 50, the default is 30
-* `verbose` output informational and diagnostic messages
-* `progress` display progress meter during t-SNE optimization
-* `min_gain`, `eta`, `initial_momentum`, `final_momentum`, `momentum_switch_iter`,
-  `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
-* `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
-  point perplexities and final Kullback-Leibler divergence
-  
-### Example usage
-```jl
+Apply t-SNE (t-Distributed Stochastic Neighbor Embedding) to `X`, embedding its rows into `ndims` dimensions while preserving close neighbours. Returns the points×`ndims` matrix of embedded coordinates.
+
+**Positional arguments**
+
+| Argument | Description |
+|---|---|
+| `X` | `AbstractMatrix` (rows = observations, columns = features) or `AbstractVector` of observations |
+| `ndims` | Dimension of the embedded space (typically 2 or 3) |
+| `reduce_dims` | Number of leading PCA dimensions of `X` to use; `0` uses all |
+| `max_iter` | Number of optimization iterations |
+| `perplexity` | Related to the number of effective nearest neighbours; typical values 5–50 |
+
+**Keyword arguments**
+
+| Argument | Default | Description |
+|---|---|---|
+| `method` | `:exact` | `:exact` (O(n²)) or `:barneshut` (O(n log n)) |
+| `theta` | `0.5` | Barnes-Hut opening angle. Lower = more accurate, range 0.2–0.8 |
+| `max_depth` | `7` | Barnes-Hut tree depth limit. Only used when `method = :barneshut` |
+| `distance` | `false` | `true` if `X` is a precomputed distance matrix; or a `Function`/`Distances.SemiMetric` |
+| `pca_init` | `false` | Initialise from the first `ndims` PCA components instead of random |
+| `reduce_dims` | `0` | PCA pre-reduction dimensionality (`0` = no reduction) |
+| `verbose` | `false` | Print informational messages |
+| `progress` | `true` | Show progress meter |
+| `extended_output` | `false` | Return `(Y, beta, kl_divergence)` instead of just `Y` |
+| `rng` | `Random.default_rng()` | RNG for reproducible initialisation; pass `MersenneTwister(seed)` for a fixed seed |
+| `min_gain`, `eta`, `initial_momentum`, `final_momentum`, `momentum_switch_iter`, `stop_cheat_iter`, `cheat_scale` | | Low-level optimiser parameters |
+
+## Methods
+
+### Exact t-SNE (`method = :exact`)
+
+The default. Computes pairwise affinities exactly — O(n²) in both time and memory. Suitable for up to a few thousand points.
+
+```julia
+Y = tsne(X, 2, 50, 1000, 30.0)
+```
+
+### Barnes-Hut t-SNE (`method = :barneshut`)
+
+O(n log n) approximation using a quadtree (2D), octree (3D), or generic space tree. Supports multi-threading (`julia -t auto`). Recommended for large datasets.
+
+```julia
+Y = tsne(X, 2, 50, 1000, 30.0; method=:barneshut, theta=0.5)
+```
+
+Supports `ndims` up to 4. Use `method=:exact` for higher dimensions.
+
+## Example
+
+```julia
 using TSne, Statistics, MLDatasets
 
 rescale(A; dims=1) = (A .- mean(A, dims=dims)) ./ max.(std(A, dims=dims), eps())
 
-alldata, allabels = MNIST.traindata(Float64);
+alldata, allabels = MNIST(split=:train)[:];
+alldata = Float64.(alldata);
 data = reshape(permutedims(alldata[:, :, 1:2500], (3, 1, 2)),
                2500, size(alldata, 1)*size(alldata, 2));
-# Normalize the data, this should be done if there are large scale differences in the dataset
 X = rescale(data, dims=1);
 
-Y = tsne(X, 2, 50, 1000, 20.0);
+Y = tsne(X, 2, 50, 1000, 20.0; method=:barneshut)
 
 using Plots
 theplot = scatter(Y[:,1], Y[:,2], marker=(2,2,:auto,stroke(0)), color=Int.(allabels[1:size(Y,1)]))
@@ -68,12 +88,39 @@ Plots.pdf(theplot, "myplot.pdf")
 
 ![](example.png)
 
+## Running the example scripts
+
+The scripts in `examples/` and `scripts/` use additional packages (Gadfly, Cairo, MLDatasets, RDatasets) that are not installed as part of TSne.jl. Each directory has its own `Project.toml`. Activate it with `--project`:
+
+```bash
+# One-time setup
+julia --project=scripts -e "import Pkg; Pkg.instantiate()"
+
+# Run a script
+julia --project=scripts -t auto scripts/mnist_bh.jl
+```
+
+Similarly for `examples/`:
+
+```bash
+julia --project=examples -e "import Pkg; Pkg.instantiate()"
+julia --project=examples examples/demo.jl iris
+```
+
+## Benchmarks
+
+```bash
+julia --project -t auto benchmark/bm_compare.jl   # fast before/after comparison (~2 min)
+julia --project -t auto benchmark/benchmark.jl     # full suite
+```
+
 ## Command line usage
 
-```julia demo-csv.jl haveheader --labelcol=5 iris-headers.csv```
-
-Creates `myplot.pdf` with t-SNE result visualized using `Gadfly.jl`.
+```bash
+julia examples/demo-csv.jl haveheader --labelcol=5 examples/iris-headers.csv
+```
 
 ## See also
+
  * [Some tips working with t-SNE](http://lejon.github.io)
  * [How to Use t-SNE Effectively](http://distill.pub/2016/misread-tsne/)

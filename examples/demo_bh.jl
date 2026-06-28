@@ -48,7 +48,7 @@ else
 end
 
 println("X dimensions are: ", size(X))
-Y = tsne(X, 2, initial_dims, iterations, perplexity)
+Y = tsne(X, 2, initial_dims, iterations, perplexity; method=:barneshut)
 println("Y dimensions are: ", size(Y))
 
 CSV.write(plotname*"_tsne_out.csv", DataFrame(Y, :auto), writeheader=false)
