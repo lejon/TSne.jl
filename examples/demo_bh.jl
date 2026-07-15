@@ -57,5 +57,4 @@ open("labels.txt", "w") do io
 end
 
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
-draw(PDF(plotname*".pdf", 4inch, 3inch), theplot)
-#draw(SVG(plotname*".svg", 4inch, 3inch), theplot)
+draw(PNG(plotname*".png", 4inch, 3inch), theplot)

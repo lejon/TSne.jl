@@ -6,6 +6,9 @@ Manifest.toml
 
 # Generated t-SNE output artifacts
 *.png
+!example.png
+!mousebrain_fft.png
 *.pdf
+*.pb.gz
 *_tsne_out.csv
 labels.txt

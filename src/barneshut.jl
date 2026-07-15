@@ -1,4 +1,5 @@
 using NearestNeighbors
+using NearestNeighborDescent
 
 # Use maxthreadid() on Julia 1.9+ (interactive thread pool can exceed nthreads())
 _max_thread_id() = @static if VERSION >= v"1.9"
@@ -57,6 +58,27 @@ function find_knn_kdtree(X::AbstractMatrix{T}, k::Int; progress::Bool=false) whe
     return neighbors, dists
 end
 
+function find_knn_nndescent(X::AbstractMatrix{T}, k::Int; progress::Bool=false) where T<:Number
+    n = size(X, 1)
+    progress && (pb = Progress(2; desc="Finding nearest neighbors"))
+    # NNDescent expects (d, n) — features as rows, points as columns
+    Xf = permutedims(Float32.(X), (2, 1))
+    progress && next!(pb)
+    # nndescent returns approximate kNN without self-references; distances are actual (not squared)
+    g = nndescent(Xf, k, Euclidean())
+    idx_mat, dist_mat = knn_matrices(g)     # (k, n) matrices, 1-indexed, sorted ascending
+    progress && (next!(pb); finish!(pb))
+    neighbors = [Vector{Int}(undef, k) for _ in 1:n]
+    dists     = [Vector{Float64}(undef, k) for _ in 1:n]
+    @inbounds for i in 1:n
+        for ki in 1:k
+            neighbors[i][ki] = idx_mat[ki, i]
+            dists[i][ki]     = Float64(dist_mat[ki, i])^2   # squared Euclidean
+        end
+    end
+    return neighbors, dists
+end
+
 function find_knn_bruteforce(X::AbstractMatrix{T}, k::Int; progress::Bool=false) where T<:Number
     n = size(X, 1)
     n <= 0 && return [Int[], Float64[]]
@@ -92,6 +114,9 @@ function find_knn_data(X::AbstractMatrix{T}, k::Int; progress::Bool=false) where
     k = min(k, n - 1)
     k < 1 && return [Int[], Float64[]]
     n <= 15000 && return find_knn_bruteforce(X, k; progress=progress)
+    # KD-trees degrade toward brute-force at high dimensions (curse of dimensionality).
+    # NN-Descent (approximate kNN) is 5-20x faster for the typical t-SNE input of 20-50 PCA dims.
+    size(X, 2) >= 20 && return find_knn_nndescent(X, k; progress=progress)
     return find_knn_kdtree(X, k; progress=progress)
 end
 

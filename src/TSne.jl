@@ -1,6 +1,6 @@
 module TSne
 
-using LinearAlgebra, Statistics, Distances, ProgressMeter, MultivariateStats, TSVD, Random
+using LinearAlgebra, Statistics, Distances, ProgressMeter, MultivariateStats, TSVD, Random, FFTW
 using Printf: @sprintf
 using Base.Threads
 
@@ -8,6 +8,14 @@ export tsne
 
 include("spacetree.jl")
 include("barneshut.jl")
+include("fft_tsne.jl")
+
+# For the FFT grid sizes used by compute_n_boxes (~120–486), single-threaded FFTW
+# outperforms multi-threaded FFTW because thread-launch overhead exceeds the speedup.
+# Julia's @threads handles all per-point parallelism; FFTW handles only the grid FFTs.
+function __init__()
+    FFTW.set_num_threads(1)
+end
 
 """
 Compute the point perplexities `P` given its squared distances to the other points `D`
@@ -146,7 +154,7 @@ the default is not to use PCA for initialization.
 
 ### Arguments
 * `distance` if `true`, specifies that `X` is a distance matrix,
-  if of type `Function` or `Distances.SemiMetric`, specifies the function to
+  if of type `Function` or `Distances.PreMetric`, specifies the function to
   use for calculating the distances between the rows
   (or elements, if `X` is a vector) of `X`
 * `reduce_dims` the number of the first dimensions of `X` PCA to use for t-SNE,
@@ -162,18 +170,19 @@ the default is not to use PCA for initialization.
   `stop_cheat_iter`, `cheat_scale` low-level parameters of t-SNE optimization
 * `extended_output` if `true`, returns a tuple of embedded coordinates matrix,
   point perplexities and final Kullback-Leibler divergence
-* `method` either `:exact` (default, O(n²)) or `:barneshut` (O(n log n) approximation)
+* `method` either `:exact` (default, O(n²)), `:barneshut` (O(n log n)) or `:fft` (O(n + M²logM) FIt-SNE, 2D only)
 * `theta` Barnes-Hut opening angle (default 0.5). Lower = more accurate, higher = faster.
   Typical range: 0.2–0.8.
 * `max_depth` Barnes-Hut tree depth limit (default 7). Lower = fewer tree nodes
   and faster large-dataset runs, higher = finer repulsive-force approximation.
   Only used when `method = :barneshut`.
+* `n_boxes_per_dim` FFT grid boxes per dimension (default 0 = auto). Only used when `method = :fft`.
 
 See also [Original t-SNE implementation](https://lvdmaaten.github.io/tsne).
 """
 function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, reduce_dims::Integer = 0,
               max_iter::Integer = 1000, perplexity::Number = 30.0;
-              distance::Union{Bool, Function, SemiMetric} = false,
+              distance::Union{Bool, Function, PreMetric} = false,
               min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
               initial_momentum::Number = 0.5, final_momentum::Number = 0.8, momentum_switch_iter::Integer = 250,
               stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
@@ -182,8 +191,24 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
               method::Symbol = :exact,
               theta::Number = 0.5,
               max_depth::Integer = 7,
-              rng::AbstractRNG = Random.default_rng())
-    if method == :barneshut
+              rng::AbstractRNG = Random.default_rng(),
+              n_boxes_per_dim::Integer = 0)
+    if method == :exact
+        (theta != 0.5 || max_depth != 7) && @warn("theta and max_depth are ignored when method=:exact")
+        n_boxes_per_dim != 0 && @warn("n_boxes_per_dim is ignored when method=:exact")
+        return tsne_exact(X, ndims, reduce_dims, max_iter, perplexity;
+                          distance=distance, pca_init=pca_init,
+                          min_gain=min_gain, eta=eta,
+                          initial_momentum=initial_momentum,
+                          final_momentum=final_momentum,
+                          momentum_switch_iter=momentum_switch_iter,
+                          stop_cheat_iter=stop_cheat_iter,
+                          cheat_scale=cheat_scale,
+                          verbose=verbose, progress=progress,
+                          extended_output=extended_output,
+                          rng=rng)
+    elseif method == :barneshut
+        n_boxes_per_dim != 0 && @warn("n_boxes_per_dim is ignored when method=:barneshut")
         return tsne_bh(X, ndims, reduce_dims, max_iter, perplexity;
                        distance=distance, pca_init=pca_init,
                        min_gain=min_gain, eta=eta,
@@ -197,9 +222,35 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
                        verbose=verbose, progress=progress,
                        extended_output=extended_output,
                        rng=rng)
+    elseif method == :fft
+        (theta != 0.5 || max_depth != 7) && @warn("theta and max_depth are ignored when method=:fft")
+        return tsne_fft(X, ndims, reduce_dims, max_iter, perplexity;
+                        distance=distance, pca_init=pca_init,
+                        min_gain=min_gain, eta=eta,
+                        initial_momentum=initial_momentum,
+                        final_momentum=final_momentum,
+                        momentum_switch_iter=momentum_switch_iter,
+                        stop_cheat_iter=stop_cheat_iter,
+                        cheat_scale=cheat_scale,
+                        verbose=verbose, progress=progress,
+                        extended_output=extended_output,
+                        rng=rng,
+                        n_boxes_per_dim=n_boxes_per_dim)
+    else
+        throw(ArgumentError("Unknown tsne method :$method. Valid methods: :exact, :barneshut, :fft"))
     end
+end
 
-    # preprocess X
+function tsne_exact(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, reduce_dims::Integer = 0,
+                    max_iter::Integer = 1000, perplexity::Number = 30.0;
+                    distance::Union{Bool, Function, PreMetric} = false,
+                    min_gain::Number = 0.01, eta::Number = 200.0, pca_init::Bool = false,
+                    initial_momentum::Number = 0.5, final_momentum::Number = 0.8,
+                    momentum_switch_iter::Integer = 250,
+                    stop_cheat_iter::Integer = 250, cheat_scale::Number = 12.0,
+                    verbose::Bool = false, progress::Bool = true,
+                    extended_output = false,
+                    rng::AbstractRNG = Random.default_rng())
     ini_Y_with_X = false
     if isa(X, AbstractMatrix) && (distance !== true)
         verbose && @info("Initial X shape is $(size(X))")
@@ -330,7 +381,6 @@ function tsne(X::Union{AbstractMatrix, AbstractVector}, ndims::Integer = 2, redu
     progress && (finish!(pb))
     verbose && @info(@sprintf("Final t-SNE KL-divergence=%.4f", last_kldiv))
 
-    # Return solution
     if !extended_output
         return Y
     else

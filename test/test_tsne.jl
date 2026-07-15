@@ -196,6 +196,134 @@
         end
     end
 
+    @testset "FFT method" begin
+        iris = dataset("datasets", "iris")
+        X = hcat(eachcol(iris)[1:4]...)
+
+        @testset "basic API" begin
+            Y = tsne(X, 2, -1, 10, 15, method=:fft, verbose=false, progress=false)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+        end
+
+        @testset "ndims != 2 throws" begin
+            @test_throws ArgumentError tsne(X, 3, -1, 10, 15, method=:fft,
+                                            verbose=false, progress=false)
+        end
+
+        @testset "extended_output" begin
+            Y, beta, kldiv = tsne(X, 2, -1, 10, 15, method=:fft,
+                                  verbose=false, progress=false, extended_output=true)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+            @test beta isa AbstractVector
+            @test length(beta) == 150
+            @test all(isfinite, beta)
+            @test isfinite(kldiv) && kldiv > 0
+        end
+
+        @testset "pca_init" begin
+            Y = tsne(X, 2, -1, 10, 15, method=:fft,
+                     pca_init=true, verbose=false, progress=false)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+        end
+
+        @testset "rng reproducibility" begin
+            Y1 = tsne(X, 2, -1, 10, 15, method=:fft,
+                      rng=MersenneTwister(42), progress=false)
+            Y2 = tsne(X, 2, -1, 10, 15, method=:fft,
+                      rng=MersenneTwister(42), progress=false)
+            @test Y1 == Y2
+            Y3 = tsne(X, 2, -1, 10, 15, method=:fft,
+                      rng=MersenneTwister(99), progress=false)
+            @test Y1 != Y3
+        end
+
+        @testset "distance function" begin
+            Y = tsne(X, 2, -1, 10, 15, method=:fft,
+                     distance=cityblock, verbose=false, progress=false)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+        end
+
+        @testset "distance metric (PreMetric)" begin
+            Y = tsne(X, 2, -1, 10, 15, method=:fft,
+                     distance=Minkowski(0.5), verbose=false, progress=false)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+        end
+
+        @testset "n_boxes_per_dim override" begin
+            Y = tsne(X, 2, -1, 10, 15, method=:fft,
+                     n_boxes_per_dim=20, verbose=false, progress=false)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+        end
+
+        @testset "distance = true (precomputed)" begin
+            @test_throws ArgumentError tsne(X, 2, -1, 10, 15, method=:fft,
+                                            distance=true, verbose=false, progress=false)
+            XX = pairwise(CosineDist(), X', dims=2)
+            Y = tsne(XX, 2, -1, 10, 15, method=:fft,
+                     distance=true, verbose=false, progress=false)
+            @test size(Y) == (150, 2)
+            @test all(isfinite, Y)
+        end
+
+        @testset "FFT φ and Z unit test" begin
+            # Compare FFT-interpolated φ₀..φ₃ and Z against exact O(n²) brute-force
+            n = 50
+            rng_local = MersenneTwister(1234)
+            Y = randn(rng_local, Float64, n, 2)
+            dY = zeros(Float64, n, 2)
+            n_boxes = 30
+            ws = TSne.FFTWorkspace(n, n_boxes)
+            Z_fft = TSne.compute_repulsive_forces_fft_2d!(dY, Y, ws)
+
+            # Exact sums
+            phi_exact = zeros(Float64, n, 4)
+            for i in 1:n
+                for j in 1:n
+                    d2 = (Y[i,1]-Y[j,1])^2 + (Y[i,2]-Y[j,2])^2
+                    k = (1.0 + d2)^(-2)
+                    phi_exact[i, 1] += k * 1.0
+                    phi_exact[i, 2] += k * Y[j, 1]
+                    phi_exact[i, 3] += k * Y[j, 2]
+                    phi_exact[i, 4] += k * (Y[j,1]^2 + Y[j,2]^2)
+                end
+            end
+
+            Z_exact = 0.0
+            for i in 1:n, j in 1:n
+                i == j && continue
+                Z_exact += 1.0 / (1.0 + (Y[i,1]-Y[j,1])^2 + (Y[i,2]-Y[j,2])^2)
+            end
+
+            for d in 1:4
+                phi_fft_d = ws.PHI[d, :]   # layout is (4, n)
+                phi_ex_d  = phi_exact[:, d]
+                relerr = maximum(abs.(phi_fft_d .- phi_ex_d) ./ (abs.(phi_ex_d) .+ 1e-10))
+                @test relerr < 0.05
+            end
+            @test abs(Z_fft - Z_exact) / Z_exact < 0.05
+        end
+
+        @testset "cluster separation" begin
+            # Two well-separated clusters in input should separate in embedding
+            rng_local = MersenneTwister(777)
+            n_per = 50
+            X_clust = vcat(randn(rng_local, n_per, 5),
+                           randn(rng_local, n_per, 5) .+ 20.0)
+            Y = tsne(X_clust, 2, -1, 100, 10, method=:fft,
+                     rng=MersenneTwister(1), progress=false)
+            c1 = mean(Y[1:n_per, :], dims=1)
+            c2 = mean(Y[(n_per+1):end, :], dims=1)
+            centroid_dist = sqrt(sum((c1 .- c2).^2))
+            @test centroid_dist > 1.0
+        end
+    end
+
     @testset "MNIST dataset" begin
         Random.seed!(345678)
         train_data, labels = MNIST(split=:train)[:]

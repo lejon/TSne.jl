@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 using Statistics: mean, std
 
-doc = """Use t-SNE to generate a PDF called myplot.pdf from an input CSV file. Default assumption is to have no header and no labels. If these are available in the CSV these must be given as arguments.
+doc = """Use t-SNE to generate a PNG called myplot.png from an input CSV file. Default assumption is to have no header and no labels. If these are available in the CSV these must be given as arguments.
 
 Usage:
   demo-csv.jl <filename>
@@ -62,4 +62,4 @@ Y = tsne(X, 2, 50, 1000, 20.0)
 
 using Gadfly, Cairo
 theplot = plot(x=Y[:,1], y=Y[:,2], color=labels)
-draw(PDF("myplot.pdf", 8inch, 6inch), theplot)
+draw(PNG("myplot.png", 8inch, 6inch), theplot)
