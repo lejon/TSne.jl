@@ -10,6 +10,8 @@ Julia implementation of L.J.P. van der Maaten and G.E. Hinton's [t-SNE visualisa
 - **Barnes-Hut** t-SNE — O(n log n), recommended for most datasets
 - **FFT-accelerated** t-SNE (FIt-SNE) — O(n + M² log M), experimental alternative for very large datasets (>1M points)
 
+If you have no particular reason for wanting the exact version (I can't see any reason except for possibly validating the t-SNE itself), the recommendation is always to use the Barnes Hut version, it is fast since it is both parallelizable and "approximate". But don't be scared of the "approximate", it still yields excellent results (probably better than any generic visualization method you can find! :) )
+
 ## Installation
 
 ```julia
