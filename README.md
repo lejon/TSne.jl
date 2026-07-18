@@ -12,6 +12,10 @@ Julia implementation of L.J.P. van der Maaten and G.E. Hinton's [t-SNE visualisa
 
 If you have no particular reason for wanting the exact version (I can't see any reason except for possibly validating the t-SNE itself), the recommendation is always to use the Barnes Hut version, it is fast since it is both parallelizable and "approximate". But don't be scared of the "approximate", it still yields excellent results (probably better than any generic visualization method you can find! :) )
 
+## Requirements
+
+Julia 1.7 or later is required. The 1.7 minimum is set because the Barnes-Hut and FFT methods use `Threads.@threads :static`, which was introduced in Julia 1.7 and is needed to guarantee deterministic thread-to-point assignment — a prerequisite for reproducible results when using a fixed RNG seed.
+
 ## Installation
 
 ```julia
